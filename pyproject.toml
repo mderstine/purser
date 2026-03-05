@@ -1,0 +1,14 @@
+[project]
+name = "ralph-beads"
+version = "0.1.0"
+description = "Unified agentic AI development framework combining Ralph Loop with Beads issue tracking"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
