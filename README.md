@@ -302,6 +302,17 @@ ralph-beads/
 │   └── *.md
 ├── src/                 # Application source code (agent writes here)
 ├── tests/               # Test suite
+├── .github/
+│   ├── copilot-instructions.md          # Global Copilot session context
+│   ├── agents/
+│   │   ├── beads-pm.agent.md            # Planning agent
+│   │   └── beads-dev.agent.md           # Build agent
+│   ├── skills/
+│   │   ├── beads-triage/SKILL.md        # /beads-triage skill
+│   │   ├── beads-create/SKILL.md        # /beads-create skill
+│   │   └── beads-workflow/SKILL.md      # /beads-workflow skill
+│   └── instructions/
+│       └── beads-conventions.instructions.md  # Auto-applied conventions
 └── .beads/              # Beads database (managed by bd — don't edit)
     ├── config.yaml
     ├── issues.jsonl     # Git-tracked issue export
@@ -322,6 +333,63 @@ BD_ACTOR=agent-2 ./loop.sh
 
 Each agent will claim different tasks. If agent-1 claims task A, agent-2 skips it
 and picks the next ready task.
+
+## VS Code Copilot Agent Integration
+
+If you use GitHub Copilot in VS Code, this repo includes agent definitions and
+skills that encode the ralph-beads workflow natively in agent mode — no `loop.sh`
+required.
+
+### Prerequisites
+
+- VS Code 1.108.2+ with GitHub Copilot extension
+- `bd` CLI on your PATH (verified in the agent's shell environment)
+- `.vscode/settings.json` configured for agent mode (included)
+
+### Agents
+
+| Agent | File | Purpose |
+|-------|------|---------|
+| `beads-pm` | `.github/agents/beads-pm.agent.md` | Planning loop: specs → beads task graph |
+| `beads-dev` | `.github/agents/beads-dev.agent.md` | Build loop: claim → implement → validate → commit → close |
+
+Use `@beads-pm` to convert specs into a dependency-ordered task graph.
+Use `@beads-dev` to implement the next ready task (one per invocation).
+
+### Skills
+
+| Skill | File | Purpose |
+|-------|------|---------|
+| `/beads-triage` | `.github/skills/beads-triage/SKILL.md` | Assess and classify new work |
+| `/beads-create` | `.github/skills/beads-create/SKILL.md` | Create issues with duplicate checking |
+| `/beads-workflow` | `.github/skills/beads-workflow/SKILL.md` | Full claim-implement-close cycle |
+
+### How the Loop Maps to Agent Mode
+
+The Ralph Loop (`while :; do claude -p; done`) becomes **repeated agent invocations**:
+
+| Ralph Loop | VS Code Agent Mode |
+|------------|-------------------|
+| `loop.sh` iterates automatically | You invoke `@beads-dev` per task |
+| Fresh context each iteration | Agent mode provides session isolation |
+| `bd ready` picks next task | `@beads-dev` calls `bd ready` itself |
+| One-task-per-iteration discipline | Enforced by `beads-dev` agent rules |
+
+**Typical workflow:**
+
+```
+1. Write specs in specs/
+2. @beads-pm — creates task graph from specs
+3. @beads-dev — implements one task, commits, closes
+4. Repeat step 3 until bd ready returns empty
+```
+
+### Instruction Files
+
+`.github/instructions/beads-conventions.instructions.md` is auto-applied to all
+files and encodes bd CLI conventions, commit format, and coding standards.
+`.github/copilot-instructions.md` injects the ralph-beads protocol into every
+Copilot chat session.
 
 ## Adapting for Non-Python Projects
 
