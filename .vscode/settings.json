@@ -1,0 +1,6 @@
+{
+  "chat.agent.enabled": true,
+  "github.copilot.chat.agent.runInTerminal.setupShell": "export PATH=\"$HOME/.local/bin:$PATH\"",
+  "chat.instructionFiles.enabled": true,
+  "chat.agent.maxRequests": 30
+}
