@@ -14,3 +14,7 @@ wheels/
 
 # Loop logs
 /tmp/ralph-beads-*.log
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
