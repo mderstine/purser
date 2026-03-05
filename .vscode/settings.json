@@ -1,6 +1,6 @@
 {
   "chat.agent.enabled": true,
-  "github.copilot.chat.agent.runInTerminal.setupShell": "export PATH=\"$HOME/.local/bin:$PATH\"",
+  "chat.agent.maxRequests": 30,
   "chat.instructionFiles.enabled": true,
-  "chat.agent.maxRequests": 30
+  "github.copilot.chat.agent.runInTerminal.setupShell": "export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && source \"$NVM_DIR/nvm.sh\"; export PATH=\"$HOME/.local/bin:$PATH\""
 }
