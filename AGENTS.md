@@ -28,7 +28,8 @@ bd update <id> --claim       # Claim work atomically
 bd close <id> --reason "..." # Complete work
 bd create "Title" -p <0-4> -t <type> --deps discovered-from:<id> --json
 bd dep tree <id>             # Visualize dependency graph
-bd sync                      # Sync to git
+bd dolt commit               # Commit pending Dolt changes (batch mode only)
+bd dolt push                 # Push beads to remote
 bd prime                     # Session context summary
 ```
 
@@ -42,7 +43,7 @@ bd prime                     # Session context summary
 ## Known Patterns & Gotchas
 
 <!-- Add learnings here as you discover them -->
-<!-- Example: "bd sync must run before git commit to ensure JSONL is current" -->
+<!-- Example: "bd dolt push required after git push to keep remote beads in sync" -->
 
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
@@ -111,11 +112,11 @@ bd close bd-42 --reason "Completed" --json
 
 ### Auto-Sync
 
-bd automatically syncs via Dolt:
+bd automatically commits each write to Dolt history (default mode):
 
-- Each write auto-commits to Dolt history
 - Use `bd dolt push`/`bd dolt pull` for remote sync
-- No manual export/import needed!
+- No manual `bd sync` — that command does not exist
+- In `--dolt-auto-commit batch` mode only: use `bd dolt commit` to flush pending changes
 
 ### Important Rules
 
@@ -141,7 +142,6 @@ For more details, see README.md and docs/QUICKSTART.md.
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```

@@ -62,11 +62,7 @@ bd dep add <id-a> <id-b> --type related --json
 2. Run `bd ready --json` to verify at least some work is unblocked
 3. Run `bd dep tree <epic-id>` for each epic to verify the graph makes sense
 
-## Phase 4: Sync & Exit
-
-```bash
-bd sync
-```
+## Phase 4: Exit
 
 Report a summary of what was planned:
 - Total issues created (by type and priority)

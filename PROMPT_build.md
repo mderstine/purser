@@ -86,12 +86,7 @@ Closes: <issue-id>"
 bd close <issue-id> --reason "<what was implemented and how>" --json
 ```
 
-3. Sync beads:
-```bash
-bd sync
-```
-
-4. Exit. The loop will restart you for the next task.
+3. Exit. The loop will restart you for the next task.
 
 ## Rules
 

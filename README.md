@@ -231,7 +231,6 @@ Write tests manually if needed to raise the quality bar.
 │                     loop.sh                              │
 │  while true; do                                          │
 │      cat PROMPT_build.md | claude -p                     │
-│      bd sync                                             │
 │  done                                                    │
 └─────────────┬───────────────────────────────┬───────────┘
               │                               │
