@@ -9,6 +9,11 @@
 #   ./loop.sh sync         # Sync beads issues to GitHub (single-shot)
 #   ./loop.sh triage       # Triage spec-candidate GitHub Issues (single-shot)
 #   ./loop.sh changelog    # Generate changelog from closed issues (single-shot)
+#
+# Timeout:
+#   --timeout=VALUE        # Override per-iteration timeout (timeout(1) format: 900, 15m, 1h)
+#   RALPH_TIMEOUT=VALUE    # Same via environment variable
+#   Defaults: build=15m, plan=10m
 
 set -euo pipefail
 
@@ -18,6 +23,11 @@ ITERATION=0
 CLAUDE_PID=""           # PID of current Claude subshell; empty when idle
 SHUTDOWN_REQUESTED=false
 SIGNAL_GRACE=30         # Seconds to wait for Claude to exit before force-kill
+
+# Timeout defaults per mode; override via --timeout=VALUE or RALPH_TIMEOUT env var
+TIMEOUT_BUILD="${RALPH_TIMEOUT:-900}"   # 15 minutes
+TIMEOUT_PLAN="${RALPH_TIMEOUT:-600}"    # 10 minutes
+TIMEOUT_OVERRIDE=""
 
 # ─── Signal handling ──────────────────────────────────────────────────────────
 
@@ -64,12 +74,13 @@ trap 'cleanup SIGTERM' TERM
 PASSTHROUGH_ARGS=()
 for arg in "$@"; do
     case "$arg" in
-        plan)      MODE="plan" ;;
-        sync)      MODE="sync" ;;
-        triage)    MODE="triage" ;;
-        changelog) MODE="changelog" ;;
-        --dry-run) PASSTHROUGH_ARGS+=("$arg") ;;
-        *[0-9]*)   MAX_ITERATIONS="$arg" ;;
+        plan)        MODE="plan" ;;
+        sync)        MODE="sync" ;;
+        triage)      MODE="triage" ;;
+        changelog)   MODE="changelog" ;;
+        --dry-run)   PASSTHROUGH_ARGS+=("$arg") ;;
+        --timeout=*) TIMEOUT_OVERRIDE="${arg#--timeout=}" ;;
+        *[0-9]*)     MAX_ITERATIONS="$arg" ;;
     esac
 done
 
@@ -90,6 +101,15 @@ case "$MODE" in
         ;;
 esac
 
+# Resolve per-iteration timeout
+if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
+    ITER_TIMEOUT="$TIMEOUT_OVERRIDE"
+elif [[ "$MODE" == "plan" ]]; then
+    ITER_TIMEOUT="$TIMEOUT_PLAN"
+else
+    ITER_TIMEOUT="$TIMEOUT_BUILD"
+fi
+
 PROMPT_FILE="PROMPT_${MODE}.md"
 
 if [[ ! -f "$PROMPT_FILE" ]]; then
@@ -107,6 +127,7 @@ echo "=== Ralph-Beads Loop ==="
 echo "Mode: $MODE"
 echo "Prompt: $PROMPT_FILE"
 echo "Max iterations: ${MAX_ITERATIONS:-unlimited}"
+echo "Iteration timeout: ${ITER_TIMEOUT}s"
 echo "========================"
 
 # ─── Main loop ────────────────────────────────────────────────────────────────
@@ -137,16 +158,21 @@ while true; do
         echo "Ready work: $READY_COUNT issue(s)"
     fi
 
-    # Run Claude in a background subshell so we can track and signal it.
-    # Exit code is written to a temp file since PIPESTATUS isn't available after wait.
+    # Run Claude via timeout in a tracked background subshell.
+    # timeout exits with 124 on timeout, otherwise passes through Claude's exit code.
+    # Exit code is captured via inner bash -c PIPESTATUS so we get Claude's actual code.
     CLAUDE_EXITCODE_FILE=$(mktemp)
     (
-        cat "$PROMPT_FILE" | claude -p \
-            --output-format=stream-json \
-            --verbose \
-            --model opus \
-            2>&1 | tee "/tmp/ralph-beads-iter-${ITERATION}.log"
-        echo "${PIPESTATUS[1]:-0}" > "$CLAUDE_EXITCODE_FILE"
+        timeout --kill-after=10 "$ITER_TIMEOUT" \
+            bash -c '
+                cat "$1" | claude -p \
+                    --output-format=stream-json \
+                    --verbose \
+                    --model opus \
+                    2>&1 | tee "$2"
+                exit "${PIPESTATUS[1]:-0}"
+            ' -- "$PROMPT_FILE" "/tmp/ralph-beads-iter-${ITERATION}.log"
+        echo "$?" > "$CLAUDE_EXITCODE_FILE"
     ) &
     CLAUDE_PID=$!
 
@@ -160,7 +186,13 @@ while true; do
         break
     fi
 
-    if [[ "$EXIT_CODE" -ne 0 ]]; then
+    if [[ "$EXIT_CODE" -eq 124 ]]; then
+        echo ""
+        echo "!!! TIMEOUT: Iteration $ITERATION exceeded ${ITER_TIMEOUT}s limit !!!"
+        echo "The claimed beads issue has been left in_progress for retry."
+        echo "Press Enter to retry or Ctrl+C to stop."
+        read -r
+    elif [[ "$EXIT_CODE" -ne 0 ]]; then
         echo "Claude exited with code $EXIT_CODE. Pausing for review."
         echo "Press Enter to continue or Ctrl+C to stop."
         read -r
