@@ -87,8 +87,18 @@ def get_commit_for_issue(beads_id):
     return result[:12] if result else None
 
 
-def beads_to_labels(issue):
-    """Convert beads issue type and priority to GitHub label names."""
+def slugify_epic(title):
+    """Convert an epic title to a label-safe slug."""
+    import re
+    slug = title.lower().strip()
+    slug = re.sub(r'[^\w\s-]', '', slug)
+    slug = re.sub(r'[\s_]+', '-', slug)
+    slug = re.sub(r'-+', '-', slug)
+    return slug.strip('-')[:40]
+
+
+def beads_to_labels(issue, epic_titles=None):
+    """Convert beads issue type, priority, and epic to GitHub label names."""
     labels = []
     itype = issue.get("issue_type", "")
     if itype:
@@ -101,6 +111,12 @@ def beads_to_labels(issue):
     dep_count = issue.get("dependency_count", 0)
     if dep_count > 0 and status == "open":
         labels.append("blocked")
+    # Add epic label if issue has a parent
+    parent = issue.get("parent", "")
+    if parent and epic_titles:
+        epic_title = epic_titles.get(parent)
+        if epic_title:
+            labels.append(f"epic:{slugify_epic(epic_title)}")
     return labels
 
 
@@ -211,11 +227,11 @@ def get_external_ref(issue):
     return None
 
 
-def create_gh_issue(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None):
+def create_gh_issue(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None):
     """Create a new GitHub issue and return the issue number."""
     title = issue["title"]
     body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map)
-    labels = beads_to_labels(issue)
+    labels = beads_to_labels(issue, epic_titles=epic_titles)
     label_args = ",".join(labels)
 
     if DRY_RUN:
@@ -244,13 +260,13 @@ def create_gh_issue(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=Non
     return gh_num
 
 
-def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None):
+def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None):
     """Update an existing GitHub issue if it differs from beads state."""
     changes = []
     title = issue["title"]
     body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map)
     target_state = beads_to_gh_state(issue)
-    target_labels = set(beads_to_labels(issue))
+    target_labels = set(beads_to_labels(issue, epic_titles=epic_titles))
 
     # Check title
     if gh_issue.get("title") != title:
@@ -263,7 +279,7 @@ def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=No
 
     # Check labels (only beads-managed labels)
     current_labels = {l["name"] for l in gh_issue.get("labels", [])}
-    beads_label_prefixes = ("type:", "priority:", "blocked", "spec-candidate", "spec-created")
+    beads_label_prefixes = ("type:", "priority:", "epic:", "blocked", "spec-candidate", "spec-created")
     current_beads_labels = {l for l in current_labels if any(l.startswith(p) or l == p for p in beads_label_prefixes)}
     if current_beads_labels != target_labels:
         changes.append("labels")
@@ -330,9 +346,16 @@ def main():
         print("No beads issues found.")
         return
 
+    # Build epic title map (beads_id → title) for epic label generation
+    epic_titles = {
+        i["id"]: i["title"]
+        for i in beads_issues
+        if i.get("issue_type") == "epic"
+    }
+
     # Build dependency cross-reference maps
     ext_ref_map, blocked_by_map, blocks_map = build_dependency_maps(beads_issues)
-    dep_args = dict(ext_ref_map=ext_ref_map, blocked_by_map=blocked_by_map, blocks_map=blocks_map)
+    dep_args = dict(ext_ref_map=ext_ref_map, blocked_by_map=blocked_by_map, blocks_map=blocks_map, epic_titles=epic_titles)
 
     print(f"Found {len(beads_issues)} beads issue(s), {len(gh_issues)} GitHub issue(s)")
     print("")
