@@ -31,6 +31,56 @@ You write specs ──► Plan mode creates task graph ──► Build mode impl
                          (bd issues)                    (one per loop iteration)
 ```
 
+### Workflow Diagram
+
+```mermaid
+flowchart TB
+    subgraph User["User / Director"]
+        specs["specs/*.md\n(requirements)"]
+        review["Review & intervene\nvia bd CLI"]
+    end
+
+    subgraph PlanLoop["Plan Loop  — ./loop.sh plan"]
+        plan_read["Read specs/"]
+        plan_create["Create beads\ntask graph (DAG)"]
+        plan_read --> plan_create
+    end
+
+    subgraph BuildLoop["Build Loop  — ./loop.sh"]
+        bd_ready["bd ready\n(pick unblocked task)"]
+        claim["bd update --claim"]
+        implement["Implement"]
+        validate["Tests / Lint / Types\n(backpressure)"]
+        commit["git commit\nCloses: bd-id\nCloses #GH-N"]
+        bd_close["bd close\n--reason '...'"]
+        bd_ready --> claim --> implement --> validate
+        validate -->|fail| implement
+        validate -->|pass| commit --> bd_close
+    end
+
+    subgraph BeadsDB[".beads/ — Source of Truth"]
+        issues["Issues + Dependencies\n(Dolt-backed DAG)"]
+    end
+
+    subgraph GitHub["GitHub"]
+        gh_issues["Issues &\nProject Board"]
+        gh_triage["spec-candidate\nIssues"]
+        gh_commits["Commits / PRs"]
+    end
+
+    specs --> plan_read
+    plan_create --> issues
+    issues --> bd_ready
+    bd_close --> issues
+
+    commit --> gh_commits
+    issues -->|"./loop.sh sync"| gh_issues
+    gh_issues -->|closing comment\n+ commit SHA| gh_commits
+
+    gh_triage -->|"./loop.sh triage"| specs
+    review -.->|"bd update\nbd create\nbd dep add"| issues
+```
+
 | Ralph Loop (original) | Ralph-Beads (this framework) |
 |----------------------|------------------------------|
 | `IMPLEMENTATION_PLAN.md` flat list | `bd` dependency graph (DAG) |
