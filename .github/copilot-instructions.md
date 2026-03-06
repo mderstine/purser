@@ -124,6 +124,24 @@ Priorities:
 - Link discovered work with `discovered-from` dependencies
 - Close issues with meaningful reasons
 
+## Landing the Plane (Session Completion)
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+1. **File issues for remaining work** — Create beads issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) — Tests, linters, builds
+3. **Update issue status** — Close finished work, update in-progress items
+4. **PUSH TO REMOTE** — This is MANDATORY:
+   ```bash
+   git pull --rebase
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Verify** — All changes committed AND pushed
+6. **Hand off** — Provide context for next session
+
+**CRITICAL:** Work is NOT complete until `git push` succeeds. Never stop before pushing — that leaves work stranded locally.
+
 ## Important
 
 - Always use `--json` flag when parsing bd output programmatically
