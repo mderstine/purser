@@ -80,7 +80,7 @@ for arg in "$@"; do
         changelog)   MODE="changelog" ;;
         --dry-run)   PASSTHROUGH_ARGS+=("$arg") ;;
         --timeout=*) TIMEOUT_OVERRIDE="${arg#--timeout=}" ;;
-        *[0-9]*)     MAX_ITERATIONS="$arg" ;;
+        *) [[ "$arg" =~ ^[0-9]+$ ]] && MAX_ITERATIONS="$arg" ;;
     esac
 done
 
