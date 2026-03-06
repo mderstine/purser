@@ -69,20 +69,34 @@ bd create --title="Discovered: <clear title>" \
 
 ## Phase 5: Complete
 
-1. Commit on green:
+1. Check if the issue has a linked GitHub Issue:
 ```bash
+bd show <id> --json  # Look for external_ref field (e.g., "gh-42")
+```
+
+2. Commit on green. If the issue has `external_ref: "gh-N"`, include
+   `Closes #N` to auto-close the GitHub Issue:
+```bash
+# With GitHub Issue link:
+git add <specific-files>
+git commit -m "<descriptive message>
+
+Closes: <issue-id>
+Closes #<github-issue-number>"
+
+# Without GitHub Issue link:
 git add <specific-files>
 git commit -m "<descriptive message>
 
 Closes: <issue-id>"
 ```
 
-2. Close the issue:
+3. Close the issue:
 ```bash
 bd close <id> --reason "<what was implemented and how>" --json
 ```
 
-3. Stop. Do not pick up the next task.
+4. Stop. Do not pick up the next task.
 
 ## Rules
 

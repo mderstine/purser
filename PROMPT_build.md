@@ -73,20 +73,34 @@ Do NOT fix discovered issues in this iteration — file them and move on.
 
 ## Phase 5: Complete & Exit
 
-1. Commit the implementation:
+1. Check if the issue has a linked GitHub Issue number:
 ```bash
+bd show <issue-id> --json  # Look for external_ref field (e.g., "gh-42")
+```
+
+2. Commit the implementation. If the issue has an `external_ref` like `gh-N`,
+   include `Closes #N` in the commit message to auto-close the GitHub Issue:
+```bash
+# With GitHub Issue link:
+git add -A
+git commit -m "<descriptive commit message>
+
+Closes: <issue-id>
+Closes #<github-issue-number>"
+
+# Without GitHub Issue link:
 git add -A
 git commit -m "<descriptive commit message>
 
 Closes: <issue-id>"
 ```
 
-2. Close the beads issue:
+3. Close the beads issue:
 ```bash
 bd close <issue-id> --reason "<what was implemented and how>" --json
 ```
 
-3. Exit. The loop will restart you for the next task.
+4. Exit. The loop will restart you for the next task.
 
 ## Rules
 
