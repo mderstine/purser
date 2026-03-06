@@ -100,7 +100,15 @@ Closes: <issue-id>"
 bd close <issue-id> --reason "<what was implemented and how>" --json
 ```
 
-4. Exit. The loop will restart you for the next task.
+4. If the issue had an `external_ref` (GitHub Issue link), post a closing
+   comment on the GitHub Issue with the commit SHA and what was done:
+```bash
+gh issue comment <github-issue-number> --body "Implemented in $(git rev-parse --short HEAD).
+
+<close reason / summary of what was done>"
+```
+
+5. Exit. The loop will restart you for the next task.
 
 ## Rules
 

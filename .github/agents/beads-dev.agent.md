@@ -96,7 +96,15 @@ Closes: <issue-id>"
 bd close <id> --reason "<what was implemented and how>" --json
 ```
 
-4. Stop. Do not pick up the next task.
+4. If the issue had an `external_ref` (GitHub Issue link), post a closing
+   comment summarizing what was done:
+```bash
+gh issue comment <github-issue-number> --body "Implemented in $(git rev-parse --short HEAD).
+
+<close reason / summary of what was done>"
+```
+
+5. Stop. Do not pick up the next task.
 
 ## Rules
 
