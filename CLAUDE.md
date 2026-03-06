@@ -26,7 +26,11 @@ commands (re-prioritize, add blockers, skip tasks, inject urgent work).
 ./loop.sh plan         # Planning mode (specs → task graph)
 ./loop.sh plan 5       # Planning mode, max 5 iterations
 ./loop.sh 20           # Build mode, max 20 iterations
+./loop.sh sync         # Sync beads issues to GitHub Issues/Project board
+./loop.sh triage       # Triage spec-candidate GitHub Issues into specs/
 ```
+
+Both `sync` and `triage` support `--dry-run` for preview.
 
 ## Files
 
@@ -35,6 +39,7 @@ commands (re-prioritize, add blockers, skip tasks, inject urgent work).
 - `AGENTS.md` — Operational guide loaded every iteration
 - `loop.sh` — The Ralph Loop orchestrator
 - `specs/` — User's requirements documents (one per topic of concern)
+- `scripts/` — GitHub integration scripts (gh-sync.sh, gh-triage.sh, gh-project.sh, gh-labels.sh)
 - `.beads/` — Beads database (managed by bd, don't edit)
 
 ## Rules

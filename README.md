@@ -191,6 +191,8 @@ You are the director, not the coder. Here's how you steer:
 | **Check remaining work** | `bd list --status open` |
 | **Find what's blocked** | `bd list --status open` then `bd dep tree <id>` |
 | **Add more specs** | Write new `specs/*.md`, run `./loop.sh plan` again |
+| **Sync to GitHub** | `./loop.sh sync` (or `--dry-run` to preview) |
+| **Triage GitHub Issues** | `./loop.sh triage` (converts `spec-candidate` issues to specs) |
 | **Re-plan from scratch** | Close all issues, write new specs, re-plan |
 
 ### Tuning the Agent's Behavior
