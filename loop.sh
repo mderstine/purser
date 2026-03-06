@@ -77,9 +77,6 @@ while true; do
         read -r
     fi
 
-    # Sync beads after each iteration
-    bd sync 2>/dev/null || true
-
     echo "--- Iteration $ITERATION complete ---"
 done
 
