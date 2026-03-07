@@ -172,6 +172,9 @@ echo "========================"
 
 # ─── Main loop ────────────────────────────────────────────────────────────────
 
+# Ensure logs directory exists
+mkdir -p logs
+
 while true; do
     ITERATION=$((ITERATION + 1))
 
@@ -184,8 +187,13 @@ while true; do
         break
     fi
 
+    # Capture iteration start time and set structured log path
+    ITER_START=$(date '+%s')
+    START_TIME=$(date '+%Y-%m-%dT%H:%M:%S')
+    LOG_FILE="logs/${MODE}-${START_TIME}-iter-${ITERATION}.log"
+
     echo ""
-    echo "--- Iteration $ITERATION ($(date '+%H:%M:%S')) ---"
+    echo "--- Iteration $ITERATION (${START_TIME}) ---"
 
     # Check if there's work to do (build mode only)
     if [[ "$MODE" == "build" ]]; then
@@ -197,6 +205,12 @@ while true; do
         fi
         echo "Ready work: $READY_COUNT issue(s)"
     fi
+
+    # Snapshot closed issues to detect which beads issue gets closed this iteration
+    CLOSED_BEFORE_FILE=$(mktemp)
+    bd list --status closed --json 2>/dev/null | \
+        python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" \
+        2>/dev/null | sort > "$CLOSED_BEFORE_FILE" || true
 
     # Run Claude via timeout in a tracked background subshell.
     # timeout exits with 124 on timeout, otherwise passes through Claude's exit code.
@@ -211,7 +225,7 @@ while true; do
                     --model opus \
                     2>&1 | tee "$2"
                 exit "${PIPESTATUS[1]:-0}"
-            ' -- "$PROMPT_FILE" "/tmp/ralph-beads-iter-${ITERATION}.log"
+            ' -- "$PROMPT_FILE" "$LOG_FILE"
         echo "$?" > "$CLAUDE_EXITCODE_FILE"
     ) &
     CLAUDE_PID=$!
@@ -221,6 +235,38 @@ while true; do
     EXIT_CODE=$(cat "$CLAUDE_EXITCODE_FILE" 2>/dev/null || echo "1")
     rm -f "$CLAUDE_EXITCODE_FILE"
     CLAUDE_PID=""
+
+    # Compute duration and outcome
+    ITER_END=$(date '+%s')
+    DURATION=$((ITER_END - ITER_START))
+    case "$EXIT_CODE" in
+        0)   OUTCOME="success" ;;
+        124) OUTCOME="timeout" ;;
+        *)   OUTCOME="error" ;;
+    esac
+
+    # Detect which beads issue was closed during this iteration
+    CLOSED_AFTER_FILE=$(mktemp)
+    bd list --status closed --json 2>/dev/null | \
+        python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" \
+        2>/dev/null | sort > "$CLOSED_AFTER_FILE" || true
+    BEADS_ISSUE_ID=$(comm -13 "$CLOSED_BEFORE_FILE" "$CLOSED_AFTER_FILE" | paste -sd ',' 2>/dev/null || echo "")
+    rm -f "$CLOSED_BEFORE_FILE" "$CLOSED_AFTER_FILE"
+
+    # Append JSON summary line to logs/summary.jsonl
+    python3 -c "
+import json
+print(json.dumps({
+    'iteration': $ITERATION,
+    'mode': '$MODE',
+    'start_time': '$START_TIME',
+    'duration_s': $DURATION,
+    'exit_code': $EXIT_CODE,
+    'beads_issue_id': '$BEADS_ISSUE_ID',
+    'outcome': '$OUTCOME',
+    'log_file': '$LOG_FILE',
+}))
+" >> logs/summary.jsonl 2>/dev/null || true
 
     if [[ "$SHUTDOWN_REQUESTED" == "true" ]]; then
         break
@@ -238,7 +284,7 @@ while true; do
         read -r
     fi
 
-    echo "--- Iteration $ITERATION complete ---"
+    echo "--- Iteration $ITERATION complete (${OUTCOME}, ${DURATION}s) ---"
 done
 
 print_summary
