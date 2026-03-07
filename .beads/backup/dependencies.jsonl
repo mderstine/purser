@@ -11,6 +11,7 @@
 {"created_at":"2026-03-05T16:02:43Z","created_by":"MD","depends_on_id":"ralph-beads-1tp","issue_id":"ralph-beads-3dw","type":"blocks"}
 {"created_at":"2026-03-05T16:02:51Z","created_by":"MD","depends_on_id":"ralph-beads-7h0","issue_id":"ralph-beads-3dw","type":"parent-child"}
 {"created_at":"2026-03-06T19:03:10Z","created_by":"MD","depends_on_id":"ralph-beads-a2t","issue_id":"ralph-beads-3qa","type":"discovered-from"}
+{"created_at":"2026-03-06T22:31:13Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-7cl","type":"parent-child"}
 {"created_at":"2026-03-06T10:04:45Z","created_by":"MD","depends_on_id":"ralph-beads-29v","issue_id":"ralph-beads-7mf","type":"blocks"}
 {"created_at":"2026-03-06T10:03:13Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-7mf","type":"parent-child"}
 {"created_at":"2026-03-06T10:01:34Z","created_by":"MD","depends_on_id":"ralph-beads-i1p","issue_id":"ralph-beads-7nj","type":"parent-child"}
@@ -37,6 +38,7 @@
 {"created_at":"2026-03-06T18:59:31Z","created_by":"MD","depends_on_id":"ralph-beads-6vp","issue_id":"ralph-beads-edl","type":"parent-child"}
 {"created_at":"2026-03-06T10:01:34Z","created_by":"MD","depends_on_id":"ralph-beads-i1p","issue_id":"ralph-beads-edl","type":"parent-child"}
 {"created_at":"2026-03-06T10:04:45Z","created_by":"MD","depends_on_id":"ralph-beads-zty","issue_id":"ralph-beads-edl","type":"blocks"}
+{"created_at":"2026-03-06T22:30:58Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-fcg","type":"parent-child"}
 {"created_at":"2026-03-06T10:01:35Z","created_by":"MD","depends_on_id":"ralph-beads-i1p","issue_id":"ralph-beads-hnh","type":"parent-child"}
 {"created_at":"2026-03-06T10:04:46Z","created_by":"MD","depends_on_id":"ralph-beads-29v","issue_id":"ralph-beads-jhm","type":"blocks"}
 {"created_at":"2026-03-06T10:03:13Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-jhm","type":"parent-child"}
@@ -70,6 +72,7 @@
 {"created_at":"2026-03-05T16:02:45Z","created_by":"MD","depends_on_id":"ralph-beads-akk","issue_id":"ralph-beads-mk4","type":"blocks"}
 {"created_at":"2026-03-05T16:02:46Z","created_by":"MD","depends_on_id":"ralph-beads-cux","issue_id":"ralph-beads-mk4","type":"blocks"}
 {"created_at":"2026-03-05T16:02:45Z","created_by":"MD","depends_on_id":"ralph-beads-ud3","issue_id":"ralph-beads-mk4","type":"blocks"}
+{"created_at":"2026-03-06T22:30:53Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-n31","type":"parent-child"}
 {"created_at":"2026-03-05T17:56:42Z","created_by":"MD","depends_on_id":"ralph-beads-hom","issue_id":"ralph-beads-ntb","type":"blocks"}
 {"created_at":"2026-03-06T18:59:29Z","created_by":"MD","depends_on_id":"ralph-beads-6vp","issue_id":"ralph-beads-ro5","type":"parent-child"}
 {"created_at":"2026-03-06T18:59:57Z","created_by":"MD","depends_on_id":"ralph-beads-adq","issue_id":"ralph-beads-s1p","type":"blocks"}
@@ -78,6 +81,8 @@
 {"created_at":"2026-03-05T16:02:38Z","created_by":"MD","depends_on_id":"ralph-beads-bf2","issue_id":"ralph-beads-ud3","type":"blocks"}
 {"created_at":"2026-03-06T10:04:47Z","created_by":"MD","depends_on_id":"ralph-beads-29v","issue_id":"ralph-beads-uk0","type":"blocks"}
 {"created_at":"2026-03-06T10:03:14Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-uk0","type":"parent-child"}
+{"created_at":"2026-03-06T22:30:54Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-uzd","type":"parent-child"}
+{"created_at":"2026-03-06T22:30:56Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-wg5","type":"parent-child"}
 {"created_at":"2026-03-06T10:01:33Z","created_by":"MD","depends_on_id":"ralph-beads-i1p","issue_id":"ralph-beads-xe1","type":"parent-child"}
 {"created_at":"2026-03-06T10:00:12Z","created_by":"MD","depends_on_id":"ralph-beads-i1p","issue_id":"ralph-beads-y6i","type":"parent-child"}
 {"created_at":"2026-03-06T10:01:34Z","created_by":"MD","depends_on_id":"ralph-beads-i1p","issue_id":"ralph-beads-zty","type":"parent-child"}
