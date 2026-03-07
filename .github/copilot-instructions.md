@@ -1,6 +1,6 @@
-# Ralph-Beads Protocol
+# Purser Protocol
 
-This project uses the Ralph-Beads framework for autonomous, dependency-aware development. These instructions apply to every Copilot chat session in this workspace.
+This project uses the Purser framework for autonomous, dependency-aware development. These instructions apply to every Copilot chat session in this workspace.
 
 ## How It Works
 

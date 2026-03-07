@@ -1,6 +1,6 @@
 # /beads-workflow
 
-Execute the standard Ralph-Beads claim-implement-close cycle for one task. This is the core build loop procedure used by the beads-dev agent and can be invoked directly for a single work iteration.
+Execute the standard Purser claim-implement-close cycle for one task. This is the core build loop procedure used by the beads-dev agent and can be invoked directly for a single work iteration.
 
 ## Steps
 

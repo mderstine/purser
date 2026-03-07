@@ -53,14 +53,14 @@ Examples:
 ```
 feat: add bd dolt commit to batch-mode flush workflow
 
-Closes: ralph-beads-abc
+Closes: purser-abc
 
 fix: handle empty database in bd ready path
 
 The ready command panicked when no issues existed. Added nil check
 before iterating dependency graph.
 
-Closes: ralph-beads-xyz
+Closes: purser-xyz
 ```
 
 ## Issue Priorities

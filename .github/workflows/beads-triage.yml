@@ -23,7 +23,7 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     if: >-
-      github.repository == 'mderstine/ralph-beads'
+      github.repository == 'mderstine/purser'
       && (github.event_name == 'workflow_dispatch'
           || github.event.label.name == 'spec-candidate')
     steps:

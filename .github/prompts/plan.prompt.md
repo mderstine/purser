@@ -1,6 +1,6 @@
 ---
 mode: agent
-description: Run the Ralph-Beads planning loop. Read all specs and create a dependency-aware task graph using beads (bd).
+description: Run the Purser planning loop. Read all specs and create a dependency-aware task graph using beads (bd).
 tools:
   - run_terminal_cmd
   - read_file
@@ -8,7 +8,7 @@ tools:
   - file_search
 ---
 
-Run the Ralph-Beads planning loop. Read all specs in `specs/` and create a dependency-aware task graph using beads (`bd`).
+Run the Purser planning loop. Read all specs in `specs/` and create a dependency-aware task graph using beads (`bd`).
 
 Follow the instructions in PROMPT_plan.md exactly:
 1. Study all specs in `specs/`

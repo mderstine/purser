@@ -12,7 +12,7 @@ permissions:
 jobs:
   pr-body:
     runs-on: ubuntu-latest
-    if: github.repository == 'mderstine/ralph-beads'
+    if: github.repository == 'mderstine/purser'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
