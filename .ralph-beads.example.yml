@@ -1,0 +1,16 @@
+# Ralph-Beads Project Configuration
+#
+# Copy this file to .ralph-beads.yml and customize for your project.
+# Environment variables (RALPH_BEADS_*) override values in this file.
+#
+# This file is .gitignore'd by default. Commit it if you want shared config.
+
+github:
+  remote: origin                 # git remote name to use
+  owner:                         # GitHub owner/org (auto-detected by init)
+  repo:                          # GitHub repo name (auto-detected by init)
+  auto_create: prompt            # prompt | skip | auto — what to do if no remote exists
+  project_number:                # GitHub Projects v2 board number (auto-detected by init)
+
+labels:
+  bootstrap: false               # set to true after gh-labels.sh has run

@@ -19,3 +19,6 @@ logs/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+# Project config (user-specific, opt-in to commit)
+.ralph-beads.yml
