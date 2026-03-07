@@ -353,11 +353,16 @@ ralph-beads/
 ├── specs/               # YOUR requirements (one per topic of concern)
 │   └── *.md
 ├── scripts/             # GitHub integration scripts
-├── .github/
+├── .claude/             # Claude Code adapter
+│   └── commands/        # Slash commands (/build, /plan, /status, etc.)
+│       └── *.md
+├── .github/             # VS Code Copilot adapter
 │   ├── copilot-instructions.md          # Global Copilot session context
 │   ├── agents/
 │   │   ├── beads-pm.agent.md            # Planning agent
 │   │   └── beads-dev.agent.md           # Build agent
+│   ├── prompts/                         # Slash commands (mirror of .claude/commands/)
+│   │   └── *.prompt.md
 │   ├── skills/
 │   │   ├── beads-triage/SKILL.md        # /beads-triage skill
 │   │   ├── beads-create/SKILL.md        # /beads-create skill
@@ -445,11 +450,21 @@ Every Claude Code convention file has a VS Code Copilot equivalent:
 | `AGENTS.md` | `.github/instructions/beads-conventions.instructions.md` | Always-on conventions: bd CLI, commit format, coding standards |
 | `PROMPT_plan.md` | `.github/agents/beads-pm.agent.md` | Planning agent: specs → dependency-aware task graph |
 | `PROMPT_build.md` | `.github/agents/beads-dev.agent.md` | Build agent: claim → implement → validate → commit → close |
-| `.claude/commands/*.md` | `.github/prompts/*.prompt.md` | Slash command / prompt file definitions |
-| `.claude/skills/` | `.github/skills/*/SKILL.md` | Reusable skill definitions |
+| `.claude/commands/build.md` | `.github/prompts/build.prompt.md` | `/build` — one build iteration |
+| `.claude/commands/plan.md` | `.github/prompts/plan.prompt.md` | `/plan` — specs → task graph |
+| `.claude/commands/status.md` | `.github/prompts/status.prompt.md` | `/status` — project status report |
+| `.claude/commands/add-spec.md` | `.github/prompts/add-spec.prompt.md` | `/add-spec` — create a new spec file |
+| `.claude/commands/create-issue.md` | `.github/prompts/create-issue.prompt.md` | `/create-issue` — file a beads issue |
+| *(no equivalent)* | `.github/skills/beads-workflow/SKILL.md` | VS Code skill: full claim-implement-close cycle |
+| *(no equivalent)* | `.github/skills/beads-triage/SKILL.md` | VS Code skill: assess and classify new work |
+| *(no equivalent)* | `.github/skills/beads-create/SKILL.md` | VS Code skill: create issues with duplicate check |
 
 The dual-file structure lets the framework run identically from both IDEs. `bd` is the
 shared state layer — it doesn't care which IDE invoked the agent.
+
+VS Code skills have no direct Claude Code equivalent — in Claude Code, skill behavior
+is embedded in the slash commands and `PROMPT_*.md` files rather than standalone skill
+definitions.
 
 ### Instruction Files
 
