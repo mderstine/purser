@@ -37,14 +37,17 @@ Run ALL validation gates before committing. Check `AGENTS.md` for project-specif
 commands. At minimum:
 
 ```bash
-# Tests
-python -m pytest tests/ -v
+# Lint
+uv run ruff check scripts/
 
-# Type checking (if configured)
-python -m mypy src/ --strict 2>/dev/null || true
+# Format check
+uv run ruff format --check scripts/
 
-# Lint (if configured)
-python -m ruff check src/ tests/ 2>/dev/null || true
+# Type checking
+uv run ty check scripts/
+
+# Tests (when test files exist)
+# uv run pytest tests/ -v
 ```
 
 If validation fails:
