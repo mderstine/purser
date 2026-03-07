@@ -95,7 +95,7 @@ case "$MODE" in
             echo "No iteration logs found. Run ./loop.sh to generate logs."
             exit 0
         fi
-        python3 -c "
+        uv run python3 -c "
 import json, sys
 
 entries = []
@@ -244,7 +244,7 @@ while true; do
 
     # Check if there's work to do (build mode only)
     if [[ "$MODE" == "build" ]]; then
-        READY_COUNT=$(bd ready --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+        READY_COUNT=$(bd ready --json 2>/dev/null | uv run python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
         if [[ "$READY_COUNT" == "0" ]]; then
             echo "No ready work found. All tasks complete or blocked."
             echo "Run './loop.sh plan' to generate new tasks, or check blockers with 'bd list --status open'."
@@ -256,7 +256,7 @@ while true; do
     # Snapshot closed issues to detect which beads issue gets closed this iteration
     CLOSED_BEFORE_FILE=$(mktemp)
     bd list --status closed --json 2>/dev/null | \
-        python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" \
+        uv run python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" \
         2>/dev/null | sort > "$CLOSED_BEFORE_FILE" || true
 
     # Run Claude via timeout in a tracked background subshell.
@@ -295,13 +295,13 @@ while true; do
     # Detect which beads issue was closed during this iteration
     CLOSED_AFTER_FILE=$(mktemp)
     bd list --status closed --json 2>/dev/null | \
-        python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" \
+        uv run python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" \
         2>/dev/null | sort > "$CLOSED_AFTER_FILE" || true
     BEADS_ISSUE_ID=$(comm -13 "$CLOSED_BEFORE_FILE" "$CLOSED_AFTER_FILE" | paste -sd ',' 2>/dev/null || echo "")
     rm -f "$CLOSED_BEFORE_FILE" "$CLOSED_AFTER_FILE"
 
     # Append JSON summary line to logs/summary.jsonl
-    python3 -c "
+    uv run python3 -c "
 import json
 print(json.dumps({
     'iteration': $ITERATION,
