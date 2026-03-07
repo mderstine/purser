@@ -1,0 +1,55 @@
+name: Beads Sync
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview sync without making changes"
+        type: boolean
+        default: false
+
+# Prevent concurrent runs (sync must be serialized)
+concurrency:
+  group: beads-sync
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.repository == 'mderstine/ralph-beads'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for commit SHA lookups
+
+      - name: Setup Beads
+        uses: ./.github/actions/setup-beads
+
+      - name: Sync beads issues to GitHub Issues
+        shell: bash
+        run: |
+          args=()
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          scripts/gh-sync.sh "${args[@]}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync issues to project board
+        shell: bash
+        run: |
+          args=()
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          scripts/gh-project.sh "${args[@]}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
