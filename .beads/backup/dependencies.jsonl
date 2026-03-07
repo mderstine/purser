@@ -22,6 +22,7 @@
 {"created_at":"2026-03-07T07:25:35Z","created_by":"MD","depends_on_id":"ralph-beads-bjj","issue_id":"ralph-beads-4s5","type":"parent-child"}
 {"created_at":"2026-03-07T14:43:01Z","created_by":"MD","depends_on_id":"ralph-beads-o4g","issue_id":"ralph-beads-521","type":"blocks"}
 {"created_at":"2026-03-06T22:31:13Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-7cl","type":"parent-child"}
+{"created_at":"2026-03-07T14:46:28Z","created_by":"MD","depends_on_id":"ralph-beads-o4g","issue_id":"ralph-beads-7f2","type":"discovered-from"}
 {"created_at":"2026-03-06T10:04:45Z","created_by":"MD","depends_on_id":"ralph-beads-29v","issue_id":"ralph-beads-7mf","type":"blocks"}
 {"created_at":"2026-03-06T10:03:13Z","created_by":"MD","depends_on_id":"ralph-beads-ckk","issue_id":"ralph-beads-7mf","type":"parent-child"}
 {"created_at":"2026-03-06T10:01:34Z","created_by":"MD","depends_on_id":"ralph-beads-i1p","issue_id":"ralph-beads-7nj","type":"parent-child"}
