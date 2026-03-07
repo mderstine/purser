@@ -29,13 +29,16 @@ for cmd in bd python3; do
     fi
 done
 
+export PYTHONPATH="$(cd "$(dirname "$0")" && pwd)${PYTHONPATH:+:$PYTHONPATH}"
+
 python3 - "$@" << 'PYEOF'
 import json
 import os
-import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
+
+from lib import run, get_commit_for_issue, get_repo_url
 
 
 def parse_args(argv):
@@ -57,15 +60,6 @@ def parse_args(argv):
     return args
 
 
-def run(cmd):
-    """Run a command (list of args) and return stdout."""
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"  ERROR: {cmd}", file=sys.stderr)
-        print(f"  {result.stderr.strip()}", file=sys.stderr)
-    return result.stdout.strip()
-
-
 def get_closed_issues(since=None):
     """Get all closed beads issues, optionally filtered by date."""
     raw = run(["bd", "list", "--status", "closed", "--json"])
@@ -75,24 +69,6 @@ def get_closed_issues(since=None):
     if since:
         issues = [i for i in issues if i.get("closed_at", "") >= since]
     return issues
-
-
-def get_commit_for_issue(beads_id):
-    """Find the commit SHA that closed a beads issue."""
-    result = run(["git", "log", "--format=%H", f"--grep=Closes: {beads_id}", "-1"])
-    return result[:12] if result else None
-
-
-def get_repo_url():
-    """Get the GitHub repo URL for linking."""
-    remote = run(["git", "remote", "get-url", "origin"])
-    if not remote:
-        return None
-    # Convert git@github.com:user/repo.git or https://github.com/user/repo.git
-    remote = remote.rstrip("/").removesuffix(".git")
-    if remote.startswith("git@"):
-        remote = remote.replace(":", "/").replace("git@", "https://")
-    return remote
 
 
 def priority_label(p):

@@ -41,24 +41,17 @@ $DRY_RUN && echo "(dry-run mode)"
 echo ""
 
 export DRY_RUN
+export PYTHONPATH="$(cd "$(dirname "$0")" && pwd)${PYTHONPATH:+:$PYTHONPATH}"
 
 python3 - "$@" << 'PYEOF'
 import json
 import os
 import re
-import subprocess
 import sys
 
+from lib import run, slugify
+
 DRY_RUN = os.environ.get("DRY_RUN") == "true"
-
-
-def run(cmd, capture=True):
-    """Run a command (list of args) and return stdout."""
-    result = subprocess.run(cmd, capture_output=capture, text=True)
-    if result.returncode != 0 and capture:
-        print(f"  ERROR: {cmd}", file=sys.stderr)
-        print(f"  {result.stderr.strip()}", file=sys.stderr)
-    return result.stdout.strip() if capture else ""
 
 
 def get_spec_candidates():
@@ -75,16 +68,6 @@ def get_spec_candidates():
         i for i in issues
         if not any(l["name"] == "spec-created" for l in i.get("labels", []))
     ]
-
-
-def slugify(title):
-    """Convert a title to a filename-safe slug."""
-    slug = title.lower().strip()
-    slug = re.sub(r'[^\w\s-]', '', slug)
-    slug = re.sub(r'[\s_]+', '-', slug)
-    slug = re.sub(r'-+', '-', slug)
-    slug = slug.strip('-')
-    return slug[:60]
 
 
 def extract_sections(body):

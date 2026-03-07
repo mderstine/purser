@@ -41,6 +41,7 @@ echo ""
 
 # Export for python
 export DRY_RUN
+export PYTHONPATH="$(cd "$(dirname "$0")" && pwd)${PYTHONPATH:+:$PYTHONPATH}"
 
 python3 - "$@" << 'PYEOF'
 import json
@@ -48,16 +49,9 @@ import os
 import subprocess
 import sys
 
+from lib import run, get_commit_for_issue, slugify, get_repo_owner, get_repo_name
+
 DRY_RUN = os.environ.get("DRY_RUN") == "true"
-
-
-def run(cmd, capture=True):
-    """Run a command (list of args) and return stdout."""
-    result = subprocess.run(cmd, capture_output=capture, text=True)
-    if result.returncode != 0 and capture:
-        print(f"  ERROR: {cmd}", file=sys.stderr)
-        print(f"  {result.stderr.strip()}", file=sys.stderr)
-    return result.stdout.strip() if capture else ""
 
 
 def get_beads_issues():
@@ -81,22 +75,6 @@ def get_gh_issues():
     return {i["number"]: i for i in issues}
 
 
-def get_commit_for_issue(beads_id):
-    """Find the commit SHA that closed a beads issue."""
-    result = run(["git", "log", "--format=%H", f"--grep=Closes: {beads_id}", "-1"])
-    return result[:12] if result else None
-
-
-def slugify_epic(title):
-    """Convert an epic title to a label-safe slug."""
-    import re
-    slug = title.lower().strip()
-    slug = re.sub(r'[^\w\s-]', '', slug)
-    slug = re.sub(r'[\s_]+', '-', slug)
-    slug = re.sub(r'-+', '-', slug)
-    return slug.strip('-')[:40]
-
-
 def beads_to_labels(issue, epic_titles=None):
     """Convert beads issue type, priority, and epic to GitHub label names."""
     labels = []
@@ -116,7 +94,7 @@ def beads_to_labels(issue, epic_titles=None):
     if parent and epic_titles:
         epic_title = epic_titles.get(parent)
         if epic_title:
-            labels.append(f"epic:{slugify_epic(epic_title)}")
+            labels.append(f"epic:{slugify(epic_title, max_length=40)}")
     return labels
 
 

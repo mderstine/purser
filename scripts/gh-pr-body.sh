@@ -29,13 +29,16 @@ for cmd in bd python3 git; do
     fi
 done
 
+export PYTHONPATH="$(cd "$(dirname "$0")" && pwd)${PYTHONPATH:+:$PYTHONPATH}"
+
 python3 - "$@" << 'PYEOF'
 import json
 import os
 import re
-import subprocess
 import sys
 from collections import defaultdict
+
+from lib import run, get_repo_url
 
 
 def parse_args(argv):
@@ -52,12 +55,6 @@ def parse_args(argv):
         else:
             i += 1
     return args
-
-
-def run(cmd):
-    """Run a command (list of args) and return stdout."""
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    return result.stdout.strip()
 
 
 def get_branch_name():
@@ -100,17 +97,6 @@ def lookup_beads_issue(beads_id):
     except json.JSONDecodeError:
         pass
     return None
-
-
-def get_repo_url():
-    """Get the GitHub repo URL for linking."""
-    remote = run(["git", "remote", "get-url", "origin"])
-    if not remote:
-        return None
-    remote = remote.rstrip("/").removesuffix(".git")
-    if remote.startswith("git@"):
-        remote = remote.replace(":", "/").replace("git@", "https://")
-    return remote
 
 
 def type_label(t):

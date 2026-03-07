@@ -53,12 +53,15 @@ $DRY_RUN && echo "(dry-run mode)"
 echo ""
 
 export DRY_RUN SETUP_ONLY
+export PYTHONPATH="$(cd "$(dirname "$0")" && pwd)${PYTHONPATH:+:$PYTHONPATH}"
 
 python3 - "$@" << 'PYEOF'
 import json
 import os
 import subprocess
 import sys
+
+from lib import get_repo_owner, get_repo_name
 
 DRY_RUN = os.environ.get("DRY_RUN") == "true"
 SETUP_ONLY = os.environ.get("SETUP_ONLY") == "true"
@@ -125,22 +128,6 @@ def get_repo_id():
         }
     """, owner=get_repo_owner(), repo=get_repo_name())
     return data["data"]["repository"]["id"] if data else None
-
-
-def get_repo_owner():
-    result = subprocess.run(
-        ["gh", "repo", "view", "--json", "owner", "-q", ".owner.login"],
-        capture_output=True, text=True
-    )
-    return result.stdout.strip()
-
-
-def get_repo_name():
-    result = subprocess.run(
-        ["gh", "repo", "view", "--json", "name", "-q", ".name"],
-        capture_output=True, text=True
-    )
-    return result.stdout.strip()
 
 
 def find_project():
