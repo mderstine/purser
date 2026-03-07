@@ -6,6 +6,7 @@
 #   ./loop.sh 20           # Build mode, max 20 iterations
 #   ./loop.sh plan         # Planning mode, unlimited
 #   ./loop.sh plan 5       # Planning mode, max 5 iterations
+#   ./loop.sh status       # Print iteration stats from logs/summary.jsonl
 #   ./loop.sh sync         # Sync beads issues to GitHub (single-shot)
 #   ./loop.sh triage       # Triage spec-candidate GitHub Issues (single-shot)
 #   ./loop.sh changelog    # Generate changelog from closed issues (single-shot)
@@ -75,6 +76,7 @@ PASSTHROUGH_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         plan)        MODE="plan" ;;
+        status)      MODE="status" ;;
         sync)        MODE="sync" ;;
         triage)      MODE="triage" ;;
         changelog)   MODE="changelog" ;;
@@ -87,6 +89,51 @@ done
 # ─── Single-shot modes: delegate to scripts and exit ──────────────────────────
 
 case "$MODE" in
+    status)
+        SUMMARY_FILE="logs/summary.jsonl"
+        if [[ ! -f "$SUMMARY_FILE" ]]; then
+            echo "No iteration logs found. Run ./loop.sh to generate logs."
+            exit 0
+        fi
+        python3 -c "
+import json, sys
+
+entries = []
+for line in open('$SUMMARY_FILE'):
+    line = line.strip()
+    if line:
+        entries.append(json.loads(line))
+
+if not entries:
+    print('No iteration data found.')
+    sys.exit(0)
+
+total = len(entries)
+success = sum(1 for e in entries if e.get('outcome') == 'success')
+fail = sum(1 for e in entries if e.get('outcome') == 'error')
+timeout = sum(1 for e in entries if e.get('outcome') == 'timeout')
+durations = [e.get('duration_s', 0) for e in entries]
+avg_dur = sum(durations) / len(durations) if durations else 0
+rate = (success / total * 100) if total else 0
+
+print('=== Ralph-Beads Iteration Stats ===')
+print()
+print(f'  Total iterations:  {total}')
+print(f'  Success:           {success}')
+print(f'  Errors:            {fail}')
+print(f'  Timeouts:          {timeout}')
+print(f'  Success rate:      {rate:.0f}%')
+print(f'  Avg duration:      {avg_dur:.0f}s')
+print()
+print('--- Last 5 iterations ---')
+print(f'{\"#\":<5} {\"Mode\":<8} {\"Outcome\":<10} {\"Duration\":<10} {\"Beads Issue\":<20} {\"Started\"}')
+print(f'{\"─\"*5} {\"─\"*8} {\"─\"*10} {\"─\"*10} {\"─\"*20} {\"─\"*20}')
+for e in entries[-5:]:
+    dur = f\"{e.get('duration_s', 0)}s\"
+    print(f\"{e.get('iteration', '?'):<5} {e.get('mode', '?'):<8} {e.get('outcome', '?'):<10} {dur:<10} {e.get('beads_issue_id', ''):<20} {e.get('start_time', '?')}\")
+"
+        exit 0
+        ;;
     sync)
         echo "=== Ralph-Beads: GitHub Sync ==="
         exec scripts/gh-sync.sh "${PASSTHROUGH_ARGS[@]}"

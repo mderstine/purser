@@ -26,6 +26,7 @@ commands (re-prioritize, add blockers, skip tasks, inject urgent work).
 ./loop.sh plan         # Planning mode (specs → task graph)
 ./loop.sh plan 5       # Planning mode, max 5 iterations
 ./loop.sh 20           # Build mode, max 20 iterations
+./loop.sh status       # Print iteration stats from logs/summary.jsonl
 ./loop.sh sync         # Sync beads issues to GitHub Issues/Project board
 ./loop.sh triage       # Triage spec-candidate GitHub Issues into specs/
 ```
