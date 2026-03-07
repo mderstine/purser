@@ -78,9 +78,9 @@ print_summary() {
     if [[ -f "$CONFIG_FILE" ]]; then
         echo "  Config file: $CONFIG_FILE"
         local owner repo project_number
-        owner=$(python3 "$SCRIPTS_DIR/config.py" get github.owner 2>/dev/null || echo "")
-        repo=$(python3 "$SCRIPTS_DIR/config.py" get github.repo 2>/dev/null || echo "")
-        project_number=$(python3 "$SCRIPTS_DIR/config.py" get github.project_number 2>/dev/null || echo "")
+        owner=$(uv run python3 "$SCRIPTS_DIR/config.py" get github.owner 2>/dev/null || echo "")
+        repo=$(uv run python3 "$SCRIPTS_DIR/config.py" get github.repo 2>/dev/null || echo "")
+        project_number=$(uv run python3 "$SCRIPTS_DIR/config.py" get github.project_number 2>/dev/null || echo "")
         if [[ -n "$owner" && -n "$repo" ]]; then
             echo "  GitHub repo: $owner/$repo"
         else
@@ -108,17 +108,17 @@ print_summary() {
 print_header
 print_step 1 "Checking prerequisites"
 
-PREREQ_RESULT=$(python3 "$SCRIPTS_DIR/prereqs.py" --json 2>&1) || true
-PREREQ_OK=$(echo "$PREREQ_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('all_ok', False))" 2>/dev/null || echo "False")
+PREREQ_RESULT=$(uv run python3 "$SCRIPTS_DIR/prereqs.py" --json 2>&1) || true
+PREREQ_OK=$(echo "$PREREQ_RESULT" | uv run python3 -c "import sys,json; print(json.load(sys.stdin).get('all_ok', False))" 2>/dev/null || echo "False")
 
 # Always show the human-readable report
-python3 "$SCRIPTS_DIR/prereqs.py" 2>&1 || true
+uv run python3 "$SCRIPTS_DIR/prereqs.py" 2>&1 || true
 echo ""
 
 if [[ "$PREREQ_OK" != "True" ]]; then
     echo "Some prerequisites are missing. Install them and re-run ./init.sh"
     # Check if the critical ones (git, python3) are missing vs optional (gh, bd)
-    HAS_GIT=$(echo "$PREREQ_RESULT" | python3 -c "
+    HAS_GIT=$(echo "$PREREQ_RESULT" | uv run python3 -c "
 import sys, json
 tools = {t['name']: t['found'] for t in json.load(sys.stdin)['tools']}
 print(tools.get('git', False) and tools.get('python3', False))
@@ -170,7 +170,7 @@ print_step 3 "Beads database"
 if [[ -d "$SCRIPT_DIR/.beads" ]]; then
     echo "  .beads/ directory exists — skipping initialization."
     # Check if this looks like template data that should be reset
-    ISSUE_COUNT=$(bd list --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    ISSUE_COUNT=$(bd list --json 2>/dev/null | uv run python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
     echo "  Current issues: $ISSUE_COUNT"
 else
     echo "  Initializing beads database..."
@@ -197,22 +197,22 @@ if $SKIP_GITHUB; then
     echo "  Skipped (--skip-github)."
 else
     # First, detect non-interactively
-    REMOTE_RESULT=$(python3 "$SCRIPTS_DIR/gh_remote.py" --check --json 2>&1) || true
-    REMOTE_STATUS=$(echo "$REMOTE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'error'))" 2>/dev/null || echo "error")
+    REMOTE_RESULT=$(uv run python3 "$SCRIPTS_DIR/gh_remote.py" --check --json 2>&1) || true
+    REMOTE_STATUS=$(echo "$REMOTE_RESULT" | uv run python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'error'))" 2>/dev/null || echo "error")
 
     if [[ "$REMOTE_STATUS" == "found" ]]; then
-        GITHUB_OWNER=$(echo "$REMOTE_RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('owner',''))" 2>/dev/null || echo "")
-        GITHUB_REPO=$(echo "$REMOTE_RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('repo',''))" 2>/dev/null || echo "")
+        GITHUB_OWNER=$(echo "$REMOTE_RESULT" | uv run python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('owner',''))" 2>/dev/null || echo "")
+        GITHUB_REPO=$(echo "$REMOTE_RESULT" | uv run python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('repo',''))" 2>/dev/null || echo "")
         echo "  GitHub remote: $GITHUB_OWNER/$GITHUB_REPO"
     elif [[ "$REMOTE_STATUS" == "skipped" ]] && ! $CHECK_ONLY; then
         # No remote found — run interactively to allow creation
-        python3 "$SCRIPTS_DIR/gh_remote.py" 2>&1 || true
+        uv run python3 "$SCRIPTS_DIR/gh_remote.py" 2>&1 || true
         # Re-check after interactive flow
-        REMOTE_RESULT=$(python3 "$SCRIPTS_DIR/gh_remote.py" --check --json 2>&1) || true
-        REMOTE_STATUS=$(echo "$REMOTE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'error'))" 2>/dev/null || echo "error")
+        REMOTE_RESULT=$(uv run python3 "$SCRIPTS_DIR/gh_remote.py" --check --json 2>&1) || true
+        REMOTE_STATUS=$(echo "$REMOTE_RESULT" | uv run python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'error'))" 2>/dev/null || echo "error")
         if [[ "$REMOTE_STATUS" == "found" ]]; then
-            GITHUB_OWNER=$(echo "$REMOTE_RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('owner',''))" 2>/dev/null || echo "")
-            GITHUB_REPO=$(echo "$REMOTE_RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('repo',''))" 2>/dev/null || echo "")
+            GITHUB_OWNER=$(echo "$REMOTE_RESULT" | uv run python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('owner',''))" 2>/dev/null || echo "")
+            GITHUB_REPO=$(echo "$REMOTE_RESULT" | uv run python3 -c "import sys,json; r=json.load(sys.stdin).get('remote',{}); print(r.get('repo',''))" 2>/dev/null || echo "")
             echo "  GitHub remote: $GITHUB_OWNER/$GITHUB_REPO"
         else
             echo "  GitHub remote: not configured (local-only mode)"
@@ -237,12 +237,12 @@ if $SKIP_GITHUB || [[ -z "$GITHUB_OWNER" || -z "$GITHUB_REPO" ]]; then
     fi
 else
     # First, check existing state non-interactively
-    PROJECT_RESULT=$(python3 "$SCRIPTS_DIR/gh_project_setup.py" --check --json 2>&1) || true
-    PROJECT_STATUS=$(echo "$PROJECT_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'error'))" 2>/dev/null || echo "error")
+    PROJECT_RESULT=$(uv run python3 "$SCRIPTS_DIR/gh_project_setup.py" --check --json 2>&1) || true
+    PROJECT_STATUS=$(echo "$PROJECT_RESULT" | uv run python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'error'))" 2>/dev/null || echo "error")
 
     if [[ "$PROJECT_STATUS" == "found" ]]; then
-        GITHUB_PROJECT=$(echo "$PROJECT_RESULT" | python3 -c "import sys,json; p=json.load(sys.stdin).get('project',{}); print(p.get('number',''))" 2>/dev/null || echo "")
-        PROJECT_TITLE=$(echo "$PROJECT_RESULT" | python3 -c "import sys,json; p=json.load(sys.stdin).get('project',{}); print(p.get('title',''))" 2>/dev/null || echo "")
+        GITHUB_PROJECT=$(echo "$PROJECT_RESULT" | uv run python3 -c "import sys,json; p=json.load(sys.stdin).get('project',{}); print(p.get('number',''))" 2>/dev/null || echo "")
+        PROJECT_TITLE=$(echo "$PROJECT_RESULT" | uv run python3 -c "import sys,json; p=json.load(sys.stdin).get('project',{}); print(p.get('title',''))" 2>/dev/null || echo "")
         echo "  Found GitHub Project: $PROJECT_TITLE (#$GITHUB_PROJECT)"
     elif [[ "$PROJECT_STATUS" == "skipped" ]] && ! $CHECK_ONLY; then
         # No projects found — offer to create one interactively
@@ -250,7 +250,7 @@ else
         read -r -p "  Create a new project with default columns? [Y/n]: " CREATE_PROJECT
         CREATE_PROJECT=${CREATE_PROJECT:-Y}
         if [[ "$CREATE_PROJECT" =~ ^[Yy] ]]; then
-            CREATE_RESULT=$(python3 - "$SCRIPTS_DIR" "$GITHUB_OWNER" "$GITHUB_REPO" <<'PYEOF'
+            CREATE_RESULT=$(uv run python3 - "$SCRIPTS_DIR" "$GITHUB_OWNER" "$GITHUB_REPO" <<'PYEOF'
 import sys, json
 sys.path.insert(0, sys.argv[1])
 import gh_project_setup
@@ -261,7 +261,7 @@ else:
     print("{}")
 PYEOF
             ) || true
-            GITHUB_PROJECT=$(echo "$CREATE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))" 2>/dev/null || echo "")
+            GITHUB_PROJECT=$(echo "$CREATE_RESULT" | uv run python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))" 2>/dev/null || echo "")
             if [[ -n "$GITHUB_PROJECT" ]]; then
                 echo "  Created GitHub Project #$GITHUB_PROJECT"
             else
@@ -288,7 +288,7 @@ if $SKIP_GITHUB || [[ -z "$GITHUB_OWNER" || -z "$GITHUB_REPO" ]]; then
     fi
 else
     # Check if labels have already been bootstrapped
-    LABELS_DONE=$(python3 "$SCRIPTS_DIR/config.py" get labels.bootstrap 2>/dev/null || echo "false")
+    LABELS_DONE=$(uv run python3 "$SCRIPTS_DIR/config.py" get labels.bootstrap 2>/dev/null || echo "false")
     if [[ "$LABELS_DONE" == "true" ]]; then
         echo "  Labels already bootstrapped — skipping."
     else
@@ -309,7 +309,7 @@ echo ""
 print_step 7 "Configuration"
 
 # Build config via Python to ensure proper YAML formatting
-python3 - "$SCRIPT_DIR" "$SCRIPTS_DIR" "$GITHUB_OWNER" "$GITHUB_REPO" "$GITHUB_PROJECT" "$($SKIP_GITHUB && echo 1 || echo 0)" <<'PYEOF'
+uv run python3 - "$SCRIPT_DIR" "$SCRIPTS_DIR" "$GITHUB_OWNER" "$GITHUB_REPO" "$GITHUB_PROJECT" "$($SKIP_GITHUB && echo 1 || echo 0)" <<'PYEOF'
 import sys
 from pathlib import Path
 
