@@ -5,19 +5,23 @@ It contains project-specific patterns, constraints, and learnings.
 
 ## Build & Validate
 
+<!-- TEMPLATE: Replace these with your project's actual build commands -->
 ```bash
 # Run tests
-python -m pytest tests/ -v
+# python -m pytest tests/ -v
 
 # Type checking
-python -m mypy src/ --strict
+# python -m mypy src/ --strict
 
 # Lint
-python -m ruff check src/ tests/
+# python -m ruff check src/ tests/
 
 # Build
-python -m build
+# python -m build
 ```
+
+> **Note:** The commands above are examples for a typical Python project.
+> Uncomment and customize them for your project's toolchain.
 
 ## Beads CLI Reference
 

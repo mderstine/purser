@@ -40,12 +40,13 @@ Read the title, description, and any linked issues to fully understand the task.
 
 ## Phase 3: Validate (Backpressure)
 
-Run ALL validation gates before committing. Check `AGENTS.md` for the project's specific commands. Typical gates:
+Run ALL validation gates before committing. Check `AGENTS.md` for the project's
+actual commands. Example gates for a Python project:
 
 ```bash
-python -m pytest tests/ -v
-python -m mypy src/ --strict 2>/dev/null || true
-python -m ruff check src/ tests/ 2>/dev/null || true
+# python -m pytest tests/ -v
+# python -m mypy src/ --strict 2>/dev/null || true
+# python -m ruff check src/ tests/ 2>/dev/null || true
 ```
 
 If validation fails:

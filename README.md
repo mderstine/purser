@@ -352,8 +352,7 @@ ralph-beads/
 ├── CLAUDE.md            # Claude Code project instructions
 ├── specs/               # YOUR requirements (one per topic of concern)
 │   └── *.md
-├── src/                 # Application source code (agent writes here)
-├── tests/               # Test suite
+├── scripts/             # GitHub integration scripts
 ├── .github/
 │   ├── copilot-instructions.md          # Global Copilot session context
 │   ├── agents/
@@ -461,9 +460,10 @@ Copilot chat session.
 
 ## Adapting for Non-Python Projects
 
-1. Update `AGENTS.md` Build & Validate section with your commands
+1. Update `AGENTS.md` Build & Validate section — uncomment and customize the
+   template commands for your project's toolchain
 2. Update `PROMPT_build.md` Phase 3 with the same commands
-3. Replace `src/` and `tests/` with your project's structure
+3. Add your project's source and test directories
 4. Update `pyproject.toml` or replace with your package manager config
 
 ## Concepts & Terminology

@@ -29,12 +29,12 @@ Read the full issue: title, description, and any linked issues. Understand what 
 
 ### 4. Validate (backpressure)
 
-Run the project's quality gates from `AGENTS.md`. Typical example:
+Run the project's quality gates from `AGENTS.md`. Example for a Python project:
 
 ```bash
-python -m pytest tests/ -v
-python -m mypy src/ --strict 2>/dev/null || true
-python -m ruff check src/ tests/ 2>/dev/null || true
+# python -m pytest tests/ -v
+# python -m mypy src/ --strict 2>/dev/null || true
+# python -m ruff check src/ tests/ 2>/dev/null || true
 ```
 
 If any gate fails: read the error, fix it, re-run. Do not commit failing code.

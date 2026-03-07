@@ -66,12 +66,13 @@ One task at a time. Do not pick up additional work until the current task is clo
 
 ## Build & Validate
 
-Run ALL quality gates before committing:
+Run ALL quality gates before committing. Check `AGENTS.md` for the project's
+actual commands. Example for a Python project:
 
 ```bash
-python -m pytest tests/ -v
-python -m mypy src/ --strict
-python -m ruff check src/ tests/
+# python -m pytest tests/ -v
+# python -m mypy src/ --strict
+# python -m ruff check src/ tests/
 ```
 
 Do not commit code that fails validation. Fix issues and re-run until green.
