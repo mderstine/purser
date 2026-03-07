@@ -31,20 +31,24 @@ Do NOT create an issue if one already exists that covers it. Search with `bd sea
 For each gap, create a beads issue:
 
 ```bash
-bd create --title="<clear, actionable title>" \
+bd create "<clear, actionable title>" \
     --description="<what needs to be done and why>" \
-    --type=task|bug|feature|epic|chore \
-    --priority=<0-4>
+    -p <priority 0-4> \
+    -t <task|bug|feature|epic|chore> \
+    --json
 ```
 
 Then add dependency relationships:
 
 ```bash
-# B is blocked by A (A must complete first)
-bd dep add <B-id> <A-id>
+# Hard prerequisite — B blocks A
+bd dep add <blocked-id> <blocker-id> --type blocks --json
 
 # Epic/subtask hierarchy
-bd dep add <child-id> <epic-id>  # with --type parent-child if supported
+bd create "Subtask" --deps parent-child:<epic-id> --json
+
+# Soft informational link
+bd dep add <id-a> <id-b> --type related --json
 ```
 
 ### Priority Guidelines
