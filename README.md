@@ -131,6 +131,7 @@ Done). Runs as part of `./loop.sh sync` after issue sync. Requires L1.
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI — `claude`
   (or [VS Code Copilot](#agent-portability) for agent mode)
+- [uv](https://docs.astral.sh/uv/) — Python package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - [Beads](https://github.com/steveyegge/beads) CLI — `npm install -g @beads/bd`
 - [Dolt](https://github.com/dolthub/dolt) — version-controlled SQL database
 
@@ -153,6 +154,13 @@ Done). Runs as part of `./loop.sh sync` after issue sync. Requires L1.
 ```bash
 git clone <this-repo>
 cd ralph-beads
+
+# Install uv (Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install dependencies
+uv venv
+uv sync
 
 npm install -g @beads/bd
 bd init --prefix myproject
@@ -561,7 +569,7 @@ Copilot chat session.
    template commands for your project's toolchain (Python, Node, Rust, Go, etc.)
 2. Update `PROMPT_build.md` Phase 3 with the same validation commands
 3. Add your project's source and test directories
-4. Replace `pyproject.toml` with your package manager config (if applicable)
+4. Update `pyproject.toml` with your project's dependencies (managed via `uv add`)
 
 ## Concepts & Terminology
 

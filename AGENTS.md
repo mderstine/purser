@@ -8,20 +8,21 @@ It contains project-specific patterns, constraints, and learnings.
 <!-- TEMPLATE: Replace these with your project's actual build commands -->
 ```bash
 # Run tests
-# python -m pytest tests/ -v
+# uv run python -m pytest tests/ -v
 
 # Type checking
-# python -m mypy src/ --strict
+# uv run python -m mypy src/ --strict
 
 # Lint
-# python -m ruff check src/ tests/
+# uv run python -m ruff check src/ tests/
 
 # Build
-# python -m build
+# uv run python -m build
 ```
 
 > **Note:** The commands above are examples for a typical Python project.
 > Uncomment and customize them for your project's toolchain.
+> All Python commands use `uv run` to execute within the managed virtual environment.
 
 ## Beads CLI Reference
 

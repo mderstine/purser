@@ -22,7 +22,8 @@ commands (re-prioritize, add blockers, skip tasks, inject urgent work).
 ## First-Time Setup
 
 New to this project? Run `/init` (Claude Code slash command) to bootstrap the project:
-- Checks prerequisites (git, python3, gh, bd)
+- Checks prerequisites (git, python3, uv, gh, bd)
+- Creates Python virtual environment (`uv venv` + `uv sync`)
 - Initializes the beads database
 - Sets up GitHub remote, Project board, and labels
 - Saves configuration to `.ralph-beads.yml`
