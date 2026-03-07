@@ -90,16 +90,65 @@ flowchart TB
 | Single agent only | `--claim` enables multi-agent coordination |
 | Plan drift requires regeneration | Graph stays accurate via atomic updates |
 
+## Layered Architecture
+
+The framework is organized in three optional layers. Each layer builds on the one
+below it. You only need the layers you use.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  L2: GitHub Projects Integration (optional)                 │
+│      Kanban board sync, column mapping, custom fields       │
+│      Requires: L1 + GitHub Project                          │
+├─────────────────────────────────────────────────────────────┤
+│  L1: GitHub Repository Integration (optional)               │
+│      Issue sync, triage, changelog, PR bodies, labels       │
+│      Requires: L0 + gh CLI + GitHub repo                    │
+├─────────────────────────────────────────────────────────────┤
+│  L0: Core (local-only, always required)                     │
+│      Ralph Loop + Beads task graph + backpressure           │
+│      Requires: bd CLI + AI agent CLI + Dolt                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**L0 — Core** (`specs/core-operating-model.md`): The foundational loop. An AI agent
+runs in a `while` loop, claims one task from `bd ready`, implements it, validates
+with tests/lint, commits, closes the issue, and exits. The loop restarts with fresh
+context. Works entirely offline — no GitHub, no network required.
+
+**L1 — GitHub Repo** (`specs/github-repo-integration.md`): Optional bidirectional
+sync between beads and GitHub Issues. `./loop.sh sync` pushes beads state to GitHub;
+`./loop.sh triage` pulls `spec-candidate` GitHub Issues into `specs/`. Changelog and
+PR body generation from closed beads issues. All via `gh` CLI.
+
+**L2 — GitHub Projects** (`specs/github-projects-integration.md`): Optional kanban
+board sync. Beads statuses map to Project columns (Backlog → Ready → In Progress →
+Done). Runs as part of `./loop.sh sync` after issue sync. Requires L1.
+
 ## Prerequisites
 
+### L0 — Core (required)
+
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI — `claude`
+  (or [VS Code Copilot](#agent-portability) for agent mode)
 - [Beads](https://github.com/steveyegge/beads) CLI — `npm install -g @beads/bd`
 - [Dolt](https://github.com/dolthub/dolt) — version-controlled SQL database
-- Python 3.12+ (or adapt `AGENTS.md` for your stack)
+
+### L1 — GitHub Repo (optional)
+
+- Everything from L0
+- [GitHub CLI](https://cli.github.com/) — `gh`, authenticated (`gh auth login`)
+- A GitHub remote on the repo
+
+### L2 — GitHub Projects (optional)
+
+- Everything from L1
+- A GitHub Project (v2) linked to the repo
+- `gh` authenticated with project write permissions
 
 ## Getting Started
 
-### 1. Install
+### 1. Install (L0)
 
 ```bash
 git clone <this-repo>
@@ -205,6 +254,33 @@ The agent will:
 
 **It stops automatically when:** no ready work remains (all done or all blocked).
 
+### 6. Enable GitHub Integration (L1, optional)
+
+```bash
+# Ensure gh is installed and authenticated
+gh auth status
+
+# Bootstrap labels on your GitHub repo
+./scripts/gh-labels.sh
+
+# Sync beads issues → GitHub Issues (preview first)
+./loop.sh sync --dry-run
+./loop.sh sync
+
+# Triage spec-candidate GitHub Issues → specs/ (preview first)
+./loop.sh triage --dry-run
+./loop.sh triage
+```
+
+### 7. Enable Project Board (L2, optional)
+
+```bash
+# Sync issues to a GitHub Project board
+# (creates the project if one doesn't exist)
+./scripts/gh-project.sh --dry-run
+./scripts/gh-project.sh
+```
+
 ## How You Direct It
 
 You are the director, not the coder. Here's how you steer:
@@ -276,7 +352,7 @@ Write tests manually if needed to raise the quality bar.
 | Agent discovers too much side work | Add "minimize discovered issues" to `PROMPT_build.md` |
 | Plan is stale | Re-run `./loop.sh plan` (cheap — no code changes) |
 
-## Architecture
+## Architecture (L0 Core)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -288,7 +364,7 @@ Write tests manually if needed to raise the quality bar.
               │                               │
               ▼                               ▼
 ┌─────────────────────┐         ┌─────────────────────────┐
-│   Claude Code        │         │   Beads (bd)             │
+│   AI Agent           │         │   Beads (bd)             │
 │   (fresh context)    │◄───────►│   (persistent state)     │
 │                      │         │                          │
 │   1. bd ready        │         │   ┌───┐  ┌───┐  ┌───┐  │
@@ -390,11 +466,17 @@ BD_ACTOR=agent-2 ./loop.sh
 Each agent will claim different tasks. If agent-1 claims task A, agent-2 skips it
 and picks the next ready task.
 
-## VS Code Copilot Agent Integration
+## Agent Portability
 
-If you use GitHub Copilot in VS Code, this repo includes agent definitions and
-skills that encode the ralph-beads workflow natively in agent mode — no `loop.sh`
-required.
+The framework is agent-neutral — the core protocol (specs → plan → build → close)
+works with any AI agent that can run shell commands. This repo ships with adapter
+files for two agents:
+
+- **Claude Code** — uses `loop.sh` + `.claude/commands/` for the full Ralph Loop
+- **VS Code Copilot** — uses `.github/agents/` and `.github/skills/` for agent mode
+
+If you use GitHub Copilot in VS Code, agent definitions and skills encode the
+ralph-beads workflow natively — no `loop.sh` required.
 
 ### Prerequisites
 
@@ -473,13 +555,13 @@ files and encodes bd CLI conventions, commit format, and coding standards.
 `.github/copilot-instructions.md` injects the ralph-beads protocol into every
 Copilot chat session.
 
-## Adapting for Non-Python Projects
+## Adapting for Your Project
 
 1. Update `AGENTS.md` Build & Validate section — uncomment and customize the
-   template commands for your project's toolchain
-2. Update `PROMPT_build.md` Phase 3 with the same commands
+   template commands for your project's toolchain (Python, Node, Rust, Go, etc.)
+2. Update `PROMPT_build.md` Phase 3 with the same validation commands
 3. Add your project's source and test directories
-4. Update `pyproject.toml` or replace with your package manager config
+4. Replace `pyproject.toml` with your package manager config (if applicable)
 
 ## Concepts & Terminology
 
