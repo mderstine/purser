@@ -8,7 +8,7 @@
 #   scripts/gh-triage.sh              # Triage all spec-candidate issues
 #   scripts/gh-triage.sh --dry-run    # Preview without making changes
 #
-# Requires: gh (authenticated), python3
+# Requires: gh (authenticated), uv
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ for arg in "$@"; do
     esac
 done
 
-for cmd in gh python3; do
+for cmd in gh uv; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: $cmd not found"
         exit 1
@@ -38,4 +38,4 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 
-exec python3 "${SCRIPT_DIR}/gh_triage.py" "$@"
+exec uv run python3 "${SCRIPT_DIR}/gh_triage.py" "$@"

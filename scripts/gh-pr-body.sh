@@ -8,7 +8,7 @@
 #   scripts/gh-pr-body.sh --base dev   # Compare against dev branch
 #   scripts/gh-pr-body.sh --output pr-body.md  # Write to file
 #
-# Requires: bd, python3, git
+# Requires: bd, uv, git
 
 set -euo pipefail
 
@@ -22,7 +22,7 @@ for arg in "$@"; do
     esac
 done
 
-for cmd in bd python3 git; do
+for cmd in bd uv git; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: $cmd not found"
         exit 1
@@ -32,4 +32,4 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 
-exec python3 "${SCRIPT_DIR}/gh_pr_body.py" "$@"
+exec uv run python3 "${SCRIPT_DIR}/gh_pr_body.py" "$@"

@@ -8,7 +8,7 @@
 #   scripts/gh-project.sh --dry-run    # Preview without making changes
 #   scripts/gh-project.sh --setup      # Create/configure project only (no issue sync)
 #
-# Requires: gh (authenticated with read:project,project scopes), bd, python3
+# Requires: gh (authenticated with read:project,project scopes), bd, uv
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ for arg in "$@"; do
     esac
 done
 
-for cmd in gh bd python3; do
+for cmd in gh bd uv; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: $cmd not found"
         exit 1
@@ -48,4 +48,4 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 
-exec python3 "${SCRIPT_DIR}/gh_project.py" "$@"
+exec uv run python3 "${SCRIPT_DIR}/gh_project.py" "$@"

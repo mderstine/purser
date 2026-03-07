@@ -8,7 +8,7 @@
 #   scripts/gh-changelog.sh --output CHANGELOG.md  # Write to file
 #   scripts/gh-changelog.sh --dry-run          # Preview (same as no --output)
 #
-# Requires: bd, python3
+# Requires: bd, uv
 
 set -euo pipefail
 
@@ -22,7 +22,7 @@ for arg in "$@"; do
     esac
 done
 
-for cmd in bd python3; do
+for cmd in bd uv; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: $cmd not found"
         exit 1
@@ -32,4 +32,4 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 
-exec python3 "${SCRIPT_DIR}/gh_changelog.py" "$@"
+exec uv run python3 "${SCRIPT_DIR}/gh_changelog.py" "$@"
