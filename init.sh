@@ -10,13 +10,14 @@
 #   ./init.sh --skip-github # Skip all GitHub integration steps
 #
 # Steps:
-#   1. Check prerequisites (git, python3, gh, bd)
-#   2. Initialize beads database if needed
-#   3. Detect/create GitHub remote
-#   4. Detect/setup GitHub Project
-#   5. Bootstrap GitHub labels
-#   6. Save configuration to .ralph-beads.yml
-#   7. Print summary and next steps
+#   1. Check prerequisites (git, python3, uv, gh, bd)
+#   2. Create Python virtual environment (uv venv + uv sync)
+#   3. Initialize beads database if needed
+#   4. Detect/create GitHub remote
+#   5. Detect/setup GitHub Project
+#   6. Bootstrap GitHub labels
+#   7. Save configuration to .ralph-beads.yml
+#   8. Print summary and next steps
 
 set -euo pipefail
 
@@ -135,9 +136,36 @@ if $CHECK_ONLY; then
     exit 0
 fi
 
-# ─── Step 2: Beads Database ─────────────────────────────────────────────────
+# ─── Step 2: Python Virtual Environment ────────────────────────────────────
 
-print_step 2 "Beads database"
+print_step 2 "Python virtual environment (uv)"
+
+if command -v uv &>/dev/null; then
+    if [[ -d "$SCRIPT_DIR/.venv" ]]; then
+        echo "  .venv/ directory exists — syncing dependencies..."
+        uv sync --project "$SCRIPT_DIR" 2>&1 || {
+            echo "  WARNING: uv sync failed. Dependencies may be out of date."
+        }
+    else
+        echo "  Creating virtual environment..."
+        uv venv "$SCRIPT_DIR/.venv" 2>&1 || {
+            echo "  WARNING: uv venv failed."
+        }
+        echo "  Installing dependencies..."
+        uv sync --project "$SCRIPT_DIR" 2>&1 || {
+            echo "  WARNING: uv sync failed."
+        }
+    fi
+    echo "  Virtual environment ready."
+else
+    echo "  WARNING: uv not found — skipping virtual environment setup."
+    echo "  Install uv and re-run ./init.sh to set up the environment."
+fi
+echo ""
+
+# ─── Step 3: Beads Database ─────────────────────────────────────────────────
+
+print_step 3 "Beads database"
 
 if [[ -d "$SCRIPT_DIR/.beads" ]]; then
     echo "  .beads/ directory exists — skipping initialization."
@@ -158,9 +186,9 @@ else
 fi
 echo ""
 
-# ─── Step 3: GitHub Remote ──────────────────────────────────────────────────
+# ─── Step 4: GitHub Remote ──────────────────────────────────────────────────
 
-print_step 3 "GitHub remote"
+print_step 4 "GitHub remote"
 
 GITHUB_OWNER=""
 GITHUB_REPO=""
@@ -195,9 +223,9 @@ else
 fi
 echo ""
 
-# ─── Step 4: GitHub Project ─────────────────────────────────────────────────
+# ─── Step 5: GitHub Project ─────────────────────────────────────────────────
 
-print_step 4 "GitHub Project"
+print_step 5 "GitHub Project"
 
 GITHUB_PROJECT=""
 
@@ -248,9 +276,9 @@ PYEOF
 fi
 echo ""
 
-# ─── Step 5: Label Bootstrap ────────────────────────────────────────────────
+# ─── Step 6: Label Bootstrap ────────────────────────────────────────────────
 
-print_step 5 "GitHub labels"
+print_step 6 "GitHub labels"
 
 if $SKIP_GITHUB || [[ -z "$GITHUB_OWNER" || -z "$GITHUB_REPO" ]]; then
     if $SKIP_GITHUB; then
@@ -276,9 +304,9 @@ else
 fi
 echo ""
 
-# ─── Step 6: Save Configuration ─────────────────────────────────────────────
+# ─── Step 7: Save Configuration ─────────────────────────────────────────────
 
-print_step 6 "Configuration"
+print_step 7 "Configuration"
 
 # Build config via Python to ensure proper YAML formatting
 python3 - "$SCRIPT_DIR" "$SCRIPTS_DIR" "$GITHUB_OWNER" "$GITHUB_REPO" "$GITHUB_PROJECT" "$($SKIP_GITHUB && echo 1 || echo 0)" <<'PYEOF'
@@ -314,6 +342,6 @@ fi
 
 echo ""
 
-# ─── Step 7: Summary ────────────────────────────────────────────────────────
+# ─── Step 8: Summary ────────────────────────────────────────────────────────
 
 print_summary
