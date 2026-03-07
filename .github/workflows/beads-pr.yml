@@ -1,0 +1,41 @@
+name: Beads PR Body
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  pr-body:
+    runs-on: ubuntu-latest
+    if: github.repository == 'mderstine/ralph-beads'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git log base..HEAD
+
+      - name: Setup Beads
+        uses: ./.github/actions/setup-beads
+
+      - name: Generate PR body
+        id: generate
+        shell: bash
+        run: |
+          base="${{ github.event.pull_request.base.ref || 'main' }}"
+          scripts/gh-pr-body.sh --base "$base" --output pr-body.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update PR description
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --body-file pr-body.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
