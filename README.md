@@ -375,13 +375,13 @@ Write tests manually if needed to raise the quality bar.
 │  AI Agent            │      │  Beads (bd)              │
 │  (fresh context)     │◄────►│  (persistent state)      │
 │                      │      │                          │
-│  1. bd ready         │      │  ┌───┐  ┌───┐  ┌───┐   │
-│  2. bd claim         │      │  │ A │──│ B │──│ C │   │
-│  3. implement        │      │  └───┘  └───┘  └───┘   │
-│  4. test/lint        │      │  dependency graph       │
-│  5. commit           │      │  (DAG)                  │
+│  1. bd ready         │      │  ┌───┐  ┌───┐  ┌───┐     │
+│  2. bd claim         │      │  │ A │──│ B │──│ C │     │
+│  3. implement        │      │  └───┘  └───┘  └───┘     │
+│  4. test/lint        │      │  dependency graph        │
+│  5. commit           │      │  (DAG)                   │
 │  6. bd close         │      │                          │
-│  7. exit             │      │  .beads/issues.jsonl    │
+│  7. exit             │      │  .beads/issues.jsonl     │
 └──────────────────────┘      └──────────────────────────┘
 ```
 
