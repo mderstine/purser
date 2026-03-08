@@ -8,8 +8,12 @@ import json
 import re
 import sys
 from collections import defaultdict
+from pathlib import Path
 
-from lib import get_repo_url, run
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from cli_utils import require_commands  # noqa: E402
+from lib import get_repo_url, run  # noqa: E402
 
 
 def parse_args(argv):
@@ -145,13 +149,20 @@ def format_pr_body(beads_ids, commit_subjects, base, repo_url=None):
 
     branch = get_branch_name()
     lines.append("---")
-    lines.append(f"*Generated from `{base}..{branch}` by `scripts/gh-pr-body.sh`*")
+    lines.append(f"*Generated from `{base}..{branch}` by `scripts/gh_pr_body.py`*")
     lines.append("")
 
     return "\n".join(lines)
 
 
 def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print("Usage: gh_pr_body.py [--base BRANCH] [--output FILE]")
+        print("Generate a PR description from beads issues on the current branch.")
+        return
+
+    require_commands(["bd", "git"])
+
     args = parse_args(sys.argv[1:])
     base = args["base"]
 
