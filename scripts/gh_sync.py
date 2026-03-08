@@ -1,14 +1,22 @@
 """Sync beads issues to GitHub Issues (outbound).
 
 Beads is source of truth for task state. GitHub is the public mirror.
+
+Usage:
+    uv run python3 scripts/gh_sync.py              # Sync all beads issues to GitHub
+    uv run python3 scripts/gh_sync.py --dry-run    # Preview without making changes
 """
 
 import contextlib
 import json
 import subprocess
 import sys
+from pathlib import Path
 
-from lib import get_commit_for_issue, run, slugify
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from cli_utils import require_commands, require_gh_auth  # noqa: E402
+from lib import get_commit_for_issue, run, slugify  # noqa: E402
 
 
 def parse_args(argv):
@@ -322,6 +330,14 @@ def store_external_ref(beads_id, gh_num, dry_run):
 
 
 def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print("Usage: gh_sync.py [--dry-run]")
+        print("Sync beads issues to GitHub Issues.")
+        return
+
+    require_commands(["gh", "bd"])
+    require_gh_auth()
+
     args = parse_args(sys.argv[1:])
     dry_run = args["dry_run"]
 
