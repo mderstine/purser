@@ -202,7 +202,7 @@ def main():
         comment = (
             f"Spec created: [`{spec_path}`]"
             f"(../blob/main/{spec_path})\n\n"
-            f"Run `./loop.sh plan` to decompose this spec into tasks."
+            f"Run `uv run purser-loop plan` to decompose this spec into tasks."
         )
         run(["gh", "issue", "comment", str(number), "--body", comment])
 
@@ -218,7 +218,7 @@ def main():
         print("")
         print("Next steps:")
         print("  1. Review the generated specs in specs/")
-        print("  2. Run ./loop.sh plan to decompose into tasks")
+        print("  2. Run 'uv run purser-loop plan' to decompose into tasks")
 
 
 if __name__ == "__main__":

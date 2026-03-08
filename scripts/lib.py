@@ -1,8 +1,8 @@
 """Shared utilities for purser GitHub integration scripts.
 
-All functions use only Python stdlib. This module is imported by the
-embedded Python in gh-sync.sh, gh-triage.sh, gh-changelog.sh, and
-gh-pr-body.sh via PYTHONPATH set in their bash wrappers.
+All functions use only Python stdlib. This module is imported by
+gh_sync.py, gh_triage.py, gh_changelog.py, and gh_pr_body.py
+via sys.path.insert in each script.
 """
 
 import json

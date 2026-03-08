@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Purser Loop: Autonomous AI development with dependency-aware task tracking.
 
-Cross-platform Python equivalent of loop.sh. Uses only Python stdlib.
+Cross-platform Python loop orchestrator. Uses only Python stdlib.
 
 Usage:
     python3 scripts/loop.py              # Build mode, unlimited iterations
@@ -189,16 +189,16 @@ def _run_status() -> None:
 
 
 def _run_delegate(mode: str, passthrough_args: list[str]) -> None:
-    """Delegate to a shell script for single-shot modes."""
+    """Delegate to a Python script for single-shot modes."""
     script_map = {
-        "sync": "gh-sync.sh",
-        "triage": "gh-triage.sh",
-        "changelog": "gh-changelog.sh",
+        "sync": "gh_sync.py",
+        "triage": "gh_triage.py",
+        "changelog": "gh_changelog.py",
     }
     script = SCRIPTS_DIR / script_map[mode]
     label = {"sync": "GitHub Sync", "triage": "Issue Triage", "changelog": "Changelog"}[mode]
     print(f"=== Purser: {label} ===")
-    result = subprocess.run([str(script), *passthrough_args])
+    result = subprocess.run([sys.executable, str(script), *passthrough_args])
     sys.exit(result.returncode)
 
 

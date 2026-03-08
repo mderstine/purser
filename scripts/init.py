@@ -317,8 +317,8 @@ def step_summary() -> None:
     print()
     print("Next steps:")
     print("  1. Write specs in specs/ describing what to build")
-    print("  2. Run './loop.sh plan' to generate the task graph")
-    print("  3. Run './loop.sh' to start building")
+    print("  2. Run 'uv run purser-loop plan' to generate the task graph")
+    print("  3. Run 'uv run purser-loop' to start building")
     print()
 
 

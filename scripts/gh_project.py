@@ -451,7 +451,7 @@ def sync_issues_to_board(project_id, fields, dry_run):
                 pass
 
     if not linked:
-        print("No beads issues linked to GitHub. Run gh-sync.sh first.")
+        print("No beads issues linked to GitHub. Run gh_sync.py first.")
         return
 
     print(f"\nSyncing {len(linked)} linked issue(s) to project board...")
