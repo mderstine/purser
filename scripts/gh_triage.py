@@ -8,8 +8,12 @@ that the planning loop can decompose into beads tasks.
 import json
 import os
 import sys
+from pathlib import Path
 
-from lib import run, slugify
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from cli_utils import require_commands, require_gh_auth  # noqa: E402
+from lib import run, slugify  # noqa: E402
 
 
 def parse_args(argv):
@@ -147,6 +151,14 @@ def generate_spec(issue):
 
 
 def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print("Usage: gh_triage.py [--dry-run]")
+        print("Triage GitHub Issues labeled 'spec-candidate' into specs/ files.")
+        return
+
+    require_commands(["gh"])
+    require_gh_auth()
+
     args = parse_args(sys.argv[1:])
     dry_run = args["dry_run"]
 
