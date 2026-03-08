@@ -36,35 +36,35 @@ You write specs ──► Plan mode creates task graph ──► Build mode impl
 ```mermaid
 flowchart TB
     subgraph User["User / Director"]
-        specs["specs/*.md\n(requirements)"]
-        review["Review & intervene\nvia bd CLI"]
+        specs["specs/*.md<br/>(requirements)"]
+        review["Review & intervene<br/>via bd CLI"]
     end
 
     subgraph PlanLoop["Plan Loop  — ./loop.sh plan"]
         plan_read["Read specs/"]
-        plan_create["Create beads\ntask graph (DAG)"]
+        plan_create["Create beads<br/>task graph (DAG)"]
         plan_read --> plan_create
     end
 
     subgraph BuildLoop["Build Loop  — ./loop.sh"]
-        bd_ready["bd ready\n(pick unblocked task)"]
+        bd_ready["bd ready<br/>(pick unblocked task)"]
         claim["bd update --claim"]
         implement["Implement"]
-        validate["Tests / Lint / Types\n(backpressure)"]
-        commit["git commit\nCloses: bd-id\nCloses #GH-N"]
-        bd_close["bd close\n--reason '...'"]
+        validate["Tests / Lint / Types<br/>(backpressure)"]
+        commit["git commit<br/>Closes: bd-id<br/>Closes #GH-N"]
+        bd_close["bd close<br/>--reason '...'"]
         bd_ready --> claim --> implement --> validate
         validate -->|fail| implement
         validate -->|pass| commit --> bd_close
     end
 
     subgraph BeadsDB[".beads/ — Source of Truth"]
-        issues["Issues + Dependencies\n(Dolt-backed DAG)"]
+        issues["Issues + Dependencies<br/>(Dolt-backed DAG)"]
     end
 
     subgraph GitHub["GitHub"]
-        gh_issues["Issues &\nProject Board"]
-        gh_triage["spec-candidate\nIssues"]
+        gh_issues["Issues &<br/>Project Board"]
+        gh_triage["spec-candidate<br/>Issues"]
         gh_commits["Commits / PRs"]
     end
 
@@ -75,10 +75,10 @@ flowchart TB
 
     commit --> gh_commits
     issues -->|"./loop.sh sync"| gh_issues
-    gh_issues -->|closing comment\n+ commit SHA| gh_commits
+    gh_issues -->|"closing comment<br/>+ commit SHA"| gh_commits
 
     gh_triage -->|"./loop.sh triage"| specs
-    review -.->|"bd update\nbd create\nbd dep add"| issues
+    review -.->|"bd update<br/>bd create<br/>bd dep add"| issues
 ```
 
 | Ralph Loop (original) | Purser (this framework) |
@@ -363,26 +363,26 @@ Write tests manually if needed to raise the quality bar.
 ## Architecture (L0 Core)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     loop.sh                              │
-│  while true; do                                          │
-│      cat PROMPT_build.md | claude -p                     │
-│  done                                                    │
-└─────────────┬───────────────────────────────┬───────────┘
-              │                               │
-              ▼                               ▼
-┌─────────────────────┐         ┌─────────────────────────┐
-│   AI Agent           │         │   Beads (bd)             │
-│   (fresh context)    │◄───────►│   (persistent state)     │
-│                      │         │                          │
-│   1. bd ready        │         │   ┌───┐  ┌───┐  ┌───┐  │
-│   2. bd claim        │         │   │ A │──│ B │──│ C │  │
-│   3. implement       │         │   └───┘  └───┘  └───┘  │
-│   4. test/lint       │         │   dependency graph      │
-│   5. commit          │         │   (DAG)                 │
-│   6. bd close        │         │                          │
-│   7. exit            │         │   .beads/issues.jsonl   │
-└─────────────────────┘         └─────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│                      loop.sh                          │
+│  while true; do                                       │
+│      cat PROMPT_build.md | claude -p                  │
+│  done                                                 │
+└────────────┬──────────────────────────────┬───────────┘
+             │                              │
+             ▼                              ▼
+┌──────────────────────┐      ┌──────────────────────────┐
+│  AI Agent            │      │  Beads (bd)              │
+│  (fresh context)     │◄────►│  (persistent state)      │
+│                      │      │                          │
+│  1. bd ready         │      │  ┌───┐  ┌───┐  ┌───┐   │
+│  2. bd claim         │      │  │ A │──│ B │──│ C │   │
+│  3. implement        │      │  └───┘  └───┘  └───┘   │
+│  4. test/lint        │      │  dependency graph       │
+│  5. commit           │      │  (DAG)                  │
+│  6. bd close         │      │                          │
+│  7. exit             │      │  .beads/issues.jsonl    │
+└──────────────────────┘      └──────────────────────────┘
 ```
 
 **Why this works:**
@@ -395,30 +395,30 @@ Write tests manually if needed to raise the quality bar.
 ### Steering Model
 
 ```
-         ┌─────────────────────────────────────────┐
-         │          UPSTREAM (you control)          │
-         │                                          │
-         │  specs/     →  what to build             │
-         │  AGENTS.md  →  how to build              │
-         │  PROMPT_*.md → agent process             │
-         │  code patterns → implementation style    │
-         └────────────────────┬────────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │   Claude Code     │
-                    │   (one iteration) │
-                    └────────┬─────────┘
-                              │
-                              ▼
-         ┌─────────────────────────────────────────┐
-         │         DOWNSTREAM (backpressure)        │
-         │                                          │
-         │  tests     →  correctness                │
-         │  linter    →  style compliance            │
-         │  types     →  type safety                │
-         │  bd ready  →  dependency ordering         │
-         └─────────────────────────────────────────┘
+         ┌────────────────────────────────────────┐
+         │         UPSTREAM (you control)         │
+         │                                        │
+         │  specs/       → what to build          │
+         │  AGENTS.md    → how to build           │
+         │  PROMPT_*.md  → agent process          │
+         │  code patterns → implementation style  │
+         └───────────────────┬────────────────────┘
+                             │
+                             ▼
+                   ┌────────────────────┐
+                   │    Claude Code     │
+                   │   (one iteration)  │
+                   └─────────┬──────────┘
+                             │
+                             ▼
+         ┌────────────────────────────────────────┐
+         │        DOWNSTREAM (backpressure)       │
+         │                                        │
+         │  tests    → correctness                │
+         │  linter   → style compliance           │
+         │  types    → type safety                │
+         │  bd ready → dependency ordering        │
+         └────────────────────────────────────────┘
 ```
 
 You push intent **downstream** through specs and standards.
