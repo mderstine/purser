@@ -46,6 +46,37 @@ class TestGetVersion:
         version = prereqs._get_version("nonexistent_tool_xyz", "--version")
         assert version is None
 
+    def test_accepts_multiple_tokens(self):
+        """_get_version should work with >2 args (e.g. py -3 --version)."""
+        # Use git as a stand-in: "git --no-pager --version" is valid
+        version = prereqs._get_version("git", "--no-pager", "--version")
+        assert version is not None
+
+
+class TestGetPythonVersion:
+    def test_finds_python_on_current_platform(self):
+        plat = prereqs._detect_platform()
+        version = prereqs._get_python_version(plat)
+        assert version is not None
+        assert "Python" in version or "python" in version
+
+    @patch.object(prereqs, "_get_version", return_value=None)
+    def test_returns_none_when_all_fallbacks_fail(self, _mock):
+        assert prereqs._get_python_version("linux-apt") is None
+
+    @patch.object(prereqs, "_get_version", side_effect=[None, "Python 3.12.0"])
+    def test_falls_back_to_second_candidate(self, mock_gv):
+        result = prereqs._get_python_version("linux-apt")
+        assert result == "Python 3.12.0"
+        # First call: python3 --version (failed), second: python --version
+        assert mock_gv.call_count == 2
+
+    @patch.object(prereqs, "_get_version", side_effect=["Python 3.12.0"])
+    def test_windows_tries_python_first(self, mock_gv):
+        result = prereqs._get_python_version("windows")
+        assert result == "Python 3.12.0"
+        mock_gv.assert_called_once_with("python", "--version")
+
 
 class TestCheckPrerequisites:
     def test_returns_required_keys(self):

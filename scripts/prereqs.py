@@ -43,6 +43,14 @@ REQUIRED_TOOLS = [
     ("bd", "--version", "Beads issue tracker CLI"),
 ]
 
+# Python binary fallback order per platform.
+# On Windows there is no python3; the launcher `py -3` is the idiomatic way.
+# In uv-managed environments the binary is often just `python`.
+_PYTHON_FALLBACKS: dict[str, list[tuple[str, ...]]] = {
+    "windows": [("python", "--version"), ("py", "-3", "--version")],
+    "default": [("python3", "--version"), ("python", "--version")],
+}
+
 # Install instructions per platform
 INSTALL_INSTRUCTIONS: dict[str, dict[str, str]] = {
     "macos": {
@@ -76,11 +84,15 @@ INSTALL_INSTRUCTIONS: dict[str, dict[str, str]] = {
 }
 
 
-def _get_version(command: str, version_flag: str) -> str | None:
-    """Try to get a tool's version string. Returns None if not found."""
+def _get_version(*cmd: str) -> str | None:
+    """Try to get a tool's version string. Returns None if not found.
+
+    Accepts one or more command tokens, e.g. ``_get_version("python3", "--version")``
+    or ``_get_version("py", "-3", "--version")``.
+    """
     try:
         result = subprocess.run(
-            [command, version_flag],
+            list(cmd),
             capture_output=True,
             text=True,
             timeout=10,
@@ -94,6 +106,19 @@ def _get_version(command: str, version_flag: str) -> str | None:
         return None
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
+
+
+def _get_python_version(plat: str) -> str | None:
+    """Try platform-specific Python binary fallbacks.
+
+    Returns the version string from the first binary that works, or None.
+    """
+    key = "windows" if plat == "windows" else "default"
+    for cmd_tokens in _PYTHON_FALLBACKS[key]:
+        version = _get_version(*cmd_tokens)
+        if version is not None:
+            return version
+    return None
 
 
 def check_prerequisites() -> dict:
@@ -120,12 +145,18 @@ def check_prerequisites() -> dict:
     all_ok = True
 
     for command, version_flag, description in REQUIRED_TOOLS:
-        version = _get_version(command, version_flag)
+        # Python needs special handling: try platform-specific fallbacks.
+        if command == "python3":
+            version = _get_python_version(plat)
+        else:
+            version = _get_version(command, version_flag)
         found = version is not None
         if not found:
             all_ok = False
 
         install_map = INSTALL_INSTRUCTIONS.get(plat, INSTALL_INSTRUCTIONS["linux-other"])
+        # Always report as "python3" regardless of which binary was found,
+        # so downstream consumers (init.py tool_map["python3"]) keep working.
         tools.append(
             {
                 "name": command,
