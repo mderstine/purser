@@ -302,7 +302,20 @@ class TestConnectExisting:
         result = gh_remote.connect_existing("org", "repo")
         assert result is not None
         assert result["owner"] == "org"
+        assert result["host"] == "github.com"
         assert result["url"] == "git@github.com:org/repo.git"
+
+    @patch("gh_remote._run")
+    @patch("gh_remote.validate_remote", return_value=True)
+    def test_uses_custom_host(self, _, mock_run):
+        mock_run.side_effect = [
+            subprocess.CompletedProcess([], 1, stdout="", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        ]
+        result = gh_remote.connect_existing("team", "app", host="github.corp.example.com")
+        assert result is not None
+        assert result["host"] == "github.corp.example.com"
+        assert result["url"] == "git@github.corp.example.com:team/app.git"
 
     @patch("gh_remote._run")
     @patch("gh_remote.validate_remote", return_value=True)

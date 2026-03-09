@@ -67,6 +67,7 @@ class TestSerializeYaml:
 class TestLoadConfig:
     def test_defaults_when_no_file(self, tmp_path):
         result = config.load_config(tmp_path)
+        assert result["github"]["host"] == "github.com"
         assert result["github"]["remote"] == "origin"
         assert result["github"]["auto_create"] == "prompt"
         assert result["labels"]["bootstrap"] == "false"

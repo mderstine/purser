@@ -20,6 +20,7 @@ _ENV_PREFIX = "PURSER_"
 # Default configuration values
 DEFAULTS = {
     "github": {
+        "host": "github.com",
         "remote": "origin",
         "owner": "",
         "repo": "",
@@ -33,6 +34,7 @@ DEFAULTS = {
 
 # Maps config keys to environment variable names
 _ENV_MAP = {
+    ("github", "host"): "PURSER_GITHUB_HOST",
     ("github", "remote"): "PURSER_GITHUB_REMOTE",
     ("github", "owner"): "PURSER_GITHUB_OWNER",
     ("github", "repo"): "PURSER_GITHUB_REPO",

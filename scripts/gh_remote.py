@@ -230,7 +230,12 @@ def _prompt_owner_repo() -> tuple[str, str] | None:
         return None
 
 
-def connect_existing(owner: str, repo: str, remote_name: str = "origin") -> dict[str, str] | None:
+def connect_existing(
+    owner: str,
+    repo: str,
+    remote_name: str = "origin",
+    host: str = "github.com",
+) -> dict[str, str] | None:
     """Connect to an existing GitHub repository by adding a git remote.
 
     Validates the repo exists via ``gh``, then runs ``git remote add``.
@@ -243,7 +248,7 @@ def connect_existing(owner: str, repo: str, remote_name: str = "origin") -> dict
         )
         return None
 
-    url = f"git@github.com:{owner}/{repo}.git"
+    url = f"git@{host}:{owner}/{repo}.git"
 
     # Check if remote name already exists
     existing = _run(["git", "remote", "get-url", remote_name])
@@ -261,7 +266,7 @@ def connect_existing(owner: str, repo: str, remote_name: str = "origin") -> dict
     return {
         "name": remote_name,
         "url": url,
-        "host": "github.com",  # TODO(purser-2wb): use detected hostname
+        "host": host,
         "owner": owner,
         "repo": repo,
     }
@@ -365,6 +370,7 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
         }
     """
     cfg = config.load_config(repo_root)
+    configured_host = cfg["github"].get("host", "github.com")
     preferred_remote = cfg["github"].get("remote", "origin")
     auto_create = cfg["github"].get("auto_create", "prompt")
 
@@ -453,7 +459,7 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
                 "message": "Connection cancelled.",
             }
         owner, repo = details
-        remote = connect_existing(owner, repo, preferred_remote)
+        remote = connect_existing(owner, repo, preferred_remote, configured_host)
         if not remote:
             return {
                 "status": "error",
