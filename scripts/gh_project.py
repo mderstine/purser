@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import config  # noqa: E402
 from cli_utils import require_commands, require_gh_auth  # noqa: E402
 from lib import get_repo_name, get_repo_owner  # noqa: E402
 
@@ -559,8 +560,9 @@ def check_project_scopes():
         text=True,
     )
     if result.returncode != 0:
+        host = config.load_config().get("github", {}).get("host", "github.com")
         print("Error: gh token lacks project scopes. Run:")
-        print("  gh auth refresh -h github.com -s read:project,project")
+        print(f"  gh auth refresh -h {host} -s read:project,project")
         sys.exit(1)
 
 
