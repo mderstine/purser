@@ -170,3 +170,122 @@ class TestPromptSelect:
         projects = [{"id": "PVT_1", "title": "A", "number": 1, "url": ""}]
         result = gh_project_setup._prompt_select(projects)
         assert result is None
+
+
+class TestListOwnerProjects:
+    @patch("gh_project_setup._gql")
+    def test_returns_user_projects(self, mock_gql):
+        mock_gql.side_effect = [
+            # viewer query
+            {
+                "data": {
+                    "viewer": {
+                        "projectsV2": {
+                            "nodes": [
+                                {"id": "PVT_1", "title": "My Board", "number": 1, "url": ""},
+                            ]
+                        }
+                    }
+                }
+            },
+            # org query — fails (user is not an org)
+            None,
+        ]
+        projects = gh_project_setup.list_owner_projects("myuser")
+        assert len(projects) == 1
+        assert projects[0]["title"] == "My Board"
+
+    @patch("gh_project_setup._gql")
+    def test_merges_org_projects(self, mock_gql):
+        mock_gql.side_effect = [
+            # viewer query
+            {
+                "data": {
+                    "viewer": {
+                        "projectsV2": {
+                            "nodes": [
+                                {"id": "PVT_1", "title": "Personal", "number": 1, "url": ""},
+                            ]
+                        }
+                    }
+                }
+            },
+            # org query
+            {
+                "data": {
+                    "organization": {
+                        "projectsV2": {
+                            "nodes": [
+                                {"id": "PVT_2", "title": "Org Board", "number": 2, "url": ""},
+                            ]
+                        }
+                    }
+                }
+            },
+        ]
+        projects = gh_project_setup.list_owner_projects("myorg")
+        assert len(projects) == 2
+        titles = {p["title"] for p in projects}
+        assert titles == {"Personal", "Org Board"}
+
+    @patch("gh_project_setup._gql")
+    def test_deduplicates_by_id(self, mock_gql):
+        mock_gql.side_effect = [
+            {
+                "data": {
+                    "viewer": {
+                        "projectsV2": {
+                            "nodes": [
+                                {"id": "PVT_1", "title": "Shared", "number": 1, "url": ""},
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                "data": {
+                    "organization": {
+                        "projectsV2": {
+                            "nodes": [
+                                {"id": "PVT_1", "title": "Shared", "number": 1, "url": ""},
+                            ]
+                        }
+                    }
+                }
+            },
+        ]
+        projects = gh_project_setup.list_owner_projects("myorg")
+        assert len(projects) == 1
+
+    @patch("gh_project_setup._gql")
+    def test_returns_empty_on_total_failure(self, mock_gql):
+        mock_gql.return_value = None
+        projects = gh_project_setup.list_owner_projects("owner")
+        assert projects == []
+
+
+class TestLinkProjectToRepo:
+    @patch("gh_project_setup._gql")
+    @patch("gh_project_setup._get_repo_id", return_value="R_123")
+    def test_success(self, mock_repo_id, mock_gql):
+        mock_gql.return_value = {
+            "data": {
+                "linkProjectV2ToRepository": {
+                    "repository": {"nameWithOwner": "owner/repo"}
+                }
+            }
+        }
+        result = gh_project_setup.link_project_to_repo("PVT_1", "owner", "repo")
+        assert result is True
+        mock_gql.assert_called_once()
+
+    @patch("gh_project_setup._get_repo_id", return_value=None)
+    def test_fails_without_repo_id(self, _):
+        result = gh_project_setup.link_project_to_repo("PVT_1", "owner", "repo")
+        assert result is False
+
+    @patch("gh_project_setup._gql", return_value=None)
+    @patch("gh_project_setup._get_repo_id", return_value="R_123")
+    def test_fails_on_mutation_error(self, _, __):
+        result = gh_project_setup.link_project_to_repo("PVT_1", "owner", "repo")
+        assert result is False

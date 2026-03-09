@@ -12,6 +12,7 @@ Usage:
     python3 scripts/gh_project_setup.py --check      # check only, no prompts
 """
 
+import contextlib
 import json
 import shutil
 import subprocess
@@ -108,6 +109,85 @@ def _get_repo_id(owner: str, repo: str) -> str | None:
         return None
 
 
+def list_owner_projects(owner: str) -> list[dict]:
+    """List all GitHub Projects v2 owned by a user or organization.
+
+    Tries the user query first (``viewer.projectsV2``), then falls back to
+    ``organization.projectsV2`` for org-owned projects.
+
+    Returns a list of dicts with keys: id, title, number, url.
+    """
+    # Try user projects first
+    data = _gql(
+        """
+        query {
+            viewer {
+                projectsV2(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                    nodes { id title number url }
+                }
+            }
+        }
+    """
+    )
+    projects: list[dict] = []
+    if data:
+        with contextlib.suppress(KeyError, TypeError):
+            projects = data["data"]["viewer"]["projectsV2"]["nodes"]
+
+    # Also try organization projects if owner differs from viewer
+    org_data = _gql(
+        """
+        query($owner: String!) {
+            organization(login: $owner) {
+                projectsV2(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                    nodes { id title number url }
+                }
+            }
+        }
+    """,
+        owner=owner,
+    )
+    if org_data:
+        try:
+            org_projects = org_data["data"]["organization"]["projectsV2"]["nodes"]
+            # Merge, avoiding duplicates by id
+            seen = {p["id"] for p in projects}
+            for p in org_projects:
+                if p["id"] not in seen:
+                    projects.append(p)
+        except (KeyError, TypeError):
+            pass
+
+    return projects
+
+
+def link_project_to_repo(project_id: str, owner: str, repo: str) -> bool:
+    """Link an existing GitHub Project to a repository.
+
+    Returns True on success, False on failure.
+    """
+    repo_id = _get_repo_id(owner, repo)
+    if not repo_id:
+        print("  Failed to get repository ID.", file=sys.stderr)
+        return False
+
+    data = _gql(
+        """
+        mutation($projectId: ID!, $repositoryId: ID!) {
+            linkProjectV2ToRepository(input: {
+                projectId: $projectId, repositoryId: $repositoryId
+            }) { repository { nameWithOwner } }
+        }
+    """,
+        projectId=project_id,
+        repositoryId=repo_id,
+    )
+    if not data:
+        print("  Failed to link project to repository.", file=sys.stderr)
+        return False
+    return True
+
+
 def create_project(owner: str, repo: str, title: str = "Purser") -> dict | None:
     """Create a new GitHub Project v2 and link it to the repository.
 
@@ -140,19 +220,7 @@ def create_project(owner: str, repo: str, title: str = "Purser") -> dict | None:
         return None
 
     # Link project to repository
-    repo_id = _get_repo_id(owner, repo)
-    if repo_id:
-        _gql(
-            """
-            mutation($projectId: ID!, $repositoryId: ID!) {
-                linkProjectV2ToRepository(input: {
-                    projectId: $projectId, repositoryId: $repositoryId
-                }) { repository { nameWithOwner } }
-            }
-        """,
-            projectId=project["id"],
-            repositoryId=repo_id,
-        )
+    link_project_to_repo(project["id"], owner, repo)
 
     # Configure Status field with default columns
     _configure_status_field(project["id"])
