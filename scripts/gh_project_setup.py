@@ -21,7 +21,10 @@ from pathlib import Path
 
 # Allow importing sibling modules
 sys.path.insert(0, str(Path(__file__).parent))
-import config
+import config  # noqa: E402
+from cli_utils import setup_logging  # noqa: E402
+
+logger = setup_logging(__name__)
 
 DEFAULT_COLUMNS = [
     {"name": "Backlog", "color": "GRAY", "description": "Not yet ready to work on"},
@@ -168,7 +171,7 @@ def link_project_to_repo(project_id: str, owner: str, repo: str) -> bool:
     """
     repo_id = _get_repo_id(owner, repo)
     if not repo_id:
-        print("  Failed to get repository ID.", file=sys.stderr)
+        logger.error("  Failed to get repository ID.")
         return False
 
     data = _gql(
@@ -183,7 +186,7 @@ def link_project_to_repo(project_id: str, owner: str, repo: str) -> bool:
         repositoryId=repo_id,
     )
     if not data:
-        print("  Failed to link project to repository.", file=sys.stderr)
+        logger.error("  Failed to link project to repository.")
         return False
     return True
 
@@ -195,7 +198,7 @@ def create_project(owner: str, repo: str, title: str = "Purser") -> dict | None:
     """
     owner_id = _get_owner_id()
     if not owner_id:
-        print("  Failed to get owner ID for project creation.", file=sys.stderr)
+        logger.error("  Failed to get owner ID for project creation.")
         return None
 
     data = _gql(
@@ -210,13 +213,13 @@ def create_project(owner: str, repo: str, title: str = "Purser") -> dict | None:
         title=title,
     )
     if not data:
-        print("  Failed to create project.", file=sys.stderr)
+        logger.error("  Failed to create project.")
         return None
 
     try:
         project = data["data"]["createProjectV2"]["projectV2"]
     except (KeyError, TypeError):
-        print("  Unexpected response from project creation.", file=sys.stderr)
+        logger.error("  Unexpected response from project creation.")
         return None
 
     # Link project to repository
@@ -405,7 +408,7 @@ def detect_or_setup(
                 "project": project,
                 "message": f"Found project: {project['title']} (#{project['number']})",
             }
-        print(f"\nFound GitHub Project: {project['title']} (#{project['number']})")
+        logger.info("\nFound GitHub Project: %s (#%s)", project["title"], project["number"])
         if _prompt_yes_no("  Use this project?"):
             return {
                 "status": "found",
@@ -448,7 +451,7 @@ def detect_or_setup(
             "message": "No GitHub Projects found for this repository.",
         }
 
-    print("\nNo GitHub Projects found for this repository.")
+    logger.info("\nNo GitHub Projects found for this repository.")
     choice = _prompt_menu(
         [
             "Attach to an existing GitHub Project",
@@ -461,7 +464,7 @@ def detect_or_setup(
     if choice == 0:
         available = list_owner_projects(owner)
         if not available:
-            print("  No projects found for your account.", file=sys.stderr)
+            logger.error("  No projects found for your account.")
             return {
                 "status": "skipped",
                 "project": None,

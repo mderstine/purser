@@ -11,8 +11,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cli_utils import require_commands, require_gh_auth  # noqa: E402
+from cli_utils import require_commands, require_gh_auth, setup_logging  # noqa: E402
 from lib import run, slugify  # noqa: E402
+
+logger = setup_logging(__name__)
 
 
 def parse_args(argv):
@@ -161,19 +163,19 @@ def main():
     args = parse_args(sys.argv[1:])
     dry_run = args["dry_run"]
 
-    print("=== GitHub Issue Triage -> Specs ===")
+    logger.info("=== GitHub Issue Triage -> Specs ===")
     if dry_run:
-        print("(dry-run mode)")
-    print("")
+        logger.info("(dry-run mode)")
+    logger.info("")
 
     candidates = get_spec_candidates()
 
     if not candidates:
-        print("No unprocessed spec-candidate issues found.")
+        logger.info("No unprocessed spec-candidate issues found.")
         return
 
-    print(f"Found {len(candidates)} spec-candidate issue(s) to triage")
-    print("")
+    logger.info("Found %d spec-candidate issue(s) to triage", len(candidates))
+    logger.info("")
 
     created = 0
 
@@ -184,13 +186,13 @@ def main():
         spec_path = Path("specs") / f"{slug}.md"
 
         if spec_path.exists():
-            print(f'  skip: #{number} "{title}" -> {spec_path} (file exists)')
+            logger.info('  skip: #%d "%s" -> %s (file exists)', number, title, spec_path)
             continue
 
         spec_content = generate_spec(issue)
 
         if dry_run:
-            print(f'  would create: #{number} "{title}" -> {spec_path}')
+            logger.info('  would create: #%d "%s" -> %s', number, title, spec_path)
             created += 1
             continue
 
@@ -207,17 +209,17 @@ def main():
 
         run(["gh", "issue", "edit", str(number), "--add-label", "spec-created"])
 
-        print(f'  created: #{number} "{title}" -> {spec_path}')
+        logger.info('  created: #%d "%s" -> %s', number, title, spec_path)
         created += 1
 
-    print("")
-    print(f"Summary: {created} spec(s) {'would be ' if dry_run else ''}created")
+    logger.info("")
+    logger.info("Summary: %d spec(s) %screated", created, "would be " if dry_run else "")
 
     if created > 0 and not dry_run:
-        print("")
-        print("Next steps:")
-        print("  1. Review the generated specs in specs/")
-        print("  2. Run 'uv run purser-loop plan' to decompose into tasks")
+        logger.info("")
+        logger.info("Next steps:")
+        logger.info("  1. Review the generated specs in specs/")
+        logger.info("  2. Run 'uv run purser-loop plan' to decompose into tasks")
 
 
 if __name__ == "__main__":

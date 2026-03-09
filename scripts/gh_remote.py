@@ -21,7 +21,10 @@ from pathlib import Path
 
 # Allow importing sibling modules
 sys.path.insert(0, str(Path(__file__).parent))
-import config
+import config  # noqa: E402
+from cli_utils import setup_logging  # noqa: E402
+
+logger = setup_logging(__name__)
 
 
 def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
@@ -242,10 +245,7 @@ def connect_existing(
     Returns a remote dict on success, None on failure.
     """
     if not validate_remote(owner, repo):
-        print(
-            f"  Cannot access {owner}/{repo} — check the name and your permissions.",
-            file=sys.stderr,
-        )
+        logger.error("  Cannot access %s/%s — check the name and your permissions.", owner, repo)
         return None
 
     url = f"git@{host}:{owner}/{repo}.git"
@@ -253,14 +253,14 @@ def connect_existing(
     # Check if remote name already exists
     existing = _run(["git", "remote", "get-url", remote_name])
     if existing.returncode == 0:
-        print(f"  Remote '{remote_name}' already exists ({existing.stdout.strip()}).")
-        print(f"  Updating URL to {url}...")
+        logger.info("  Remote '%s' already exists (%s).", remote_name, existing.stdout.strip())
+        logger.info("  Updating URL to %s...", url)
         result = _run(["git", "remote", "set-url", remote_name, url])
     else:
         result = _run(["git", "remote", "add", remote_name, url])
 
     if result.returncode != 0:
-        print(f"  Failed to configure remote: {result.stderr.strip()}", file=sys.stderr)
+        logger.error("  Failed to configure remote: %s", result.stderr.strip())
         return None
 
     return {
@@ -317,7 +317,7 @@ def create_repo(name: str, visibility: str = "private") -> dict[str, str] | None
     Returns dict with name, url, owner, repo on success, None on failure.
     """
     if not _has_gh():
-        print("  gh CLI not available — cannot create repository.", file=sys.stderr)
+        logger.error("  gh CLI not available — cannot create repository.")
         return None
 
     flag = f"--{visibility}"
@@ -336,7 +336,7 @@ def create_repo(name: str, visibility: str = "private") -> dict[str, str] | None
         timeout=60,
     )
     if result.returncode != 0:
-        print(f"  Failed to create repository: {result.stderr.strip()}", file=sys.stderr)
+        logger.error("  Failed to create repository: %s", result.stderr.strip())
         return None
 
     try:
@@ -354,7 +354,7 @@ def create_repo(name: str, visibility: str = "private") -> dict[str, str] | None
             "repo": data.get("name", name),
         }
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"  Failed to parse gh output: {e}", file=sys.stderr)
+        logger.error("  Failed to parse gh output: %s", e)
         return None
 
 
@@ -438,8 +438,8 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
         }
 
     # Interactive menu: connect / create / skip
-    print()
-    print("No GitHub remote detected.")
+    logger.info("")
+    logger.info("No GitHub remote detected.")
     choice = _prompt_menu(
         [
             "Connect to an existing GitHub repository",

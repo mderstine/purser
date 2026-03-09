@@ -15,8 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cli_utils import require_commands, require_gh_auth  # noqa: E402
+from cli_utils import require_commands, require_gh_auth, setup_logging  # noqa: E402
 from lib import get_commit_for_issue, run, slugify  # noqa: E402
+
+logger = setup_logging(__name__)
 
 
 def parse_args(argv):
@@ -214,7 +216,7 @@ def create_gh_issue(
     label_args = ",".join(labels)
 
     if dry_run:
-        print(f'  would create: #{issue["id"]} -> GH issue "{title}" [{label_args}]')
+        logger.info('  would create: #%s -> GH issue "%s" [%s]', issue["id"], title, label_args)
         return None
 
     cmd_parts = ["gh", "issue", "create", "--title", title, "--body", body]
@@ -223,17 +225,17 @@ def create_gh_issue(
 
     result = subprocess.run(cmd_parts, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  ERROR creating GH issue for {issue['id']}: {result.stderr.strip()}")
+        logger.error("  ERROR creating GH issue for %s: %s", issue["id"], result.stderr.strip())
         return None
 
     url = result.stdout.strip()
     try:
         gh_num = int(url.rstrip("/").split("/")[-1])
     except (ValueError, IndexError):
-        print(f"  ERROR: could not parse issue number from: {url}")
+        logger.error("  ERROR: could not parse issue number from: %s", url)
         return None
 
-    print(f'  created: {issue["id"]} -> #{gh_num} "{title}"')
+    logger.info('  created: %s -> #%d "%s"', issue["id"], gh_num, title)
     return gh_num
 
 
@@ -280,14 +282,14 @@ def update_gh_issue(
         changes.append("labels")
 
     if not changes:
-        print(f"  unchanged: {issue['id']} -> #{gh_num}")
+        logger.info("  unchanged: %s -> #%d", issue["id"], gh_num)
         return
 
     if dry_run:
         change_desc = ", ".join(changes)
         if target_state == "closed":
             change_desc += " +closing-comment"
-        print(f"  would update: #{gh_num} ({change_desc})")
+        logger.info("  would update: #%d (%s)", gh_num, change_desc)
         return
 
     cmd_parts = ["gh", "issue", "edit", str(gh_num), "--title", title, "--body", body]
@@ -299,7 +301,7 @@ def update_gh_issue(
 
     result = subprocess.run(cmd_parts, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  ERROR updating #{gh_num}: {result.stderr.strip()}")
+        logger.error("  ERROR updating #%d: %s", gh_num, result.stderr.strip())
         return
 
     if current_state != target_state:
@@ -319,7 +321,7 @@ def update_gh_issue(
         else:
             run(["gh", "issue", "reopen", str(gh_num)])
 
-    print(f"  updated: {issue['id']} -> #{gh_num} ({', '.join(changes)})")
+    logger.info("  updated: %s -> #%d (%s)", issue["id"], gh_num, ", ".join(changes))
 
 
 def store_external_ref(beads_id, gh_num, dry_run):
@@ -341,16 +343,16 @@ def main():
     args = parse_args(sys.argv[1:])
     dry_run = args["dry_run"]
 
-    print("=== Beads -> GitHub Sync ===")
+    logger.info("=== Beads -> GitHub Sync ===")
     if dry_run:
-        print("(dry-run mode)")
-    print("")
+        logger.info("(dry-run mode)")
+    logger.info("")
 
     beads_issues = get_beads_issues()
     gh_issues = get_gh_issues()
 
     if not beads_issues:
-        print("No beads issues found.")
+        logger.info("No beads issues found.")
         return
 
     epic_titles = {i["id"]: i["title"] for i in beads_issues if i.get("issue_type") == "epic"}
@@ -370,8 +372,8 @@ def main():
         children_map=children_map,
     )
 
-    print(f"Found {len(beads_issues)} beads issue(s), {len(gh_issues)} GitHub issue(s)")
-    print("")
+    logger.info("Found %d beads issue(s), %d GitHub issue(s)", len(beads_issues), len(gh_issues))
+    logger.info("")
 
     created = 0
     updated = 0
@@ -385,7 +387,7 @@ def main():
             update_gh_issue(gh_num, issue, gh_issues[gh_num], dry_run, **dep_args)
             updated += 1
         elif gh_num and gh_num not in gh_issues:
-            print(f"  stale ref: {issue['id']} -> #{gh_num} (not found on GitHub)")
+            logger.warning("  stale ref: %s -> #%d (not found on GitHub)", issue["id"], gh_num)
             new_num = create_gh_issue(issue, dry_run, **dep_args)
             if new_num:
                 store_external_ref(issue["id"], new_num, dry_run)
@@ -400,8 +402,8 @@ def main():
             else:
                 skipped += 1
 
-    print("")
-    print(f"Summary: {created} created, {updated} updated, {skipped} skipped")
+    logger.info("")
+    logger.info("Summary: %d created, %d updated, %d skipped", created, updated, skipped)
 
 
 if __name__ == "__main__":
