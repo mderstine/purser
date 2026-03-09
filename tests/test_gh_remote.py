@@ -216,6 +216,119 @@ class TestDetectOrCreateGhFallback:
         assert result["status"] == "skipped"
 
 
+class TestPromptMenu:
+    @patch("builtins.input", return_value="1")
+    def test_select_first(self, _):
+        result = gh_remote._prompt_menu(["A", "B", "C"])
+        assert result == 0
+
+    @patch("builtins.input", return_value="2")
+    def test_select_second(self, _):
+        result = gh_remote._prompt_menu(["A", "B", "C"])
+        assert result == 1
+
+    @patch("builtins.input", return_value="")
+    def test_default_is_first(self, _):
+        result = gh_remote._prompt_menu(["A", "B"])
+        assert result == 0
+
+    @patch("builtins.input", return_value="99")
+    def test_invalid_returns_none(self, _):
+        result = gh_remote._prompt_menu(["A", "B"])
+        assert result is None
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_eof_returns_none(self, _):
+        assert gh_remote._prompt_menu(["A"]) is None
+
+
+class TestPromptOwnerRepo:
+    @patch("builtins.input", return_value="myorg/myrepo")
+    def test_valid_slug(self, _):
+        result = gh_remote._prompt_owner_repo()
+        assert result == ("myorg", "myrepo")
+
+    @patch("builtins.input", return_value="noslash")
+    def test_no_slash_returns_none(self, _):
+        assert gh_remote._prompt_owner_repo() is None
+
+    @patch("builtins.input", return_value="/repo")
+    def test_empty_owner_returns_none(self, _):
+        assert gh_remote._prompt_owner_repo() is None
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_eof_returns_none(self, _):
+        assert gh_remote._prompt_owner_repo() is None
+
+
+class TestConnectExisting:
+    @patch("gh_remote._run")
+    @patch("gh_remote.validate_remote", return_value=True)
+    def test_adds_remote_when_not_exists(self, _, mock_run):
+        # get-url fails (remote doesn't exist), then add succeeds
+        mock_run.side_effect = [
+            subprocess.CompletedProcess([], 1, stdout="", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        ]
+        result = gh_remote.connect_existing("org", "repo")
+        assert result is not None
+        assert result["owner"] == "org"
+        assert result["url"] == "git@github.com:org/repo.git"
+
+    @patch("gh_remote._run")
+    @patch("gh_remote.validate_remote", return_value=True)
+    def test_updates_url_when_remote_exists(self, _, mock_run):
+        # get-url succeeds (remote exists), then set-url succeeds
+        mock_run.side_effect = [
+            subprocess.CompletedProcess([], 0, stdout="old-url\n", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        ]
+        result = gh_remote.connect_existing("org", "repo")
+        assert result is not None
+
+    @patch("gh_remote.validate_remote", return_value=False)
+    def test_returns_none_if_validation_fails(self, _):
+        assert gh_remote.connect_existing("bad", "repo") is None
+
+
+class TestDetectOrCreateMenu:
+    @patch("gh_remote._prompt_new_branch", return_value=None)
+    @patch("gh_remote.connect_existing")
+    @patch("gh_remote._prompt_owner_repo", return_value=("org", "repo"))
+    @patch("gh_remote._prompt_menu", return_value=0)
+    @patch("gh_remote._has_gh", return_value=True)
+    @patch("gh_remote._detect_via_gh_cli", return_value=None)
+    @patch("gh_remote.detect_github_remotes", return_value=[])
+    def test_connect_existing_flow(
+        self, _det, _gh_cli, _has_gh, _menu, _owner, mock_connect, _branch
+    ):
+        mock_connect.return_value = {
+            "name": "origin",
+            "url": "git@github.com:org/repo.git",
+            "owner": "org",
+            "repo": "repo",
+        }
+        result = gh_remote.detect_or_create(Path("/tmp/fake"))
+        assert result["status"] == "connected"
+        assert result["remote"]["owner"] == "org"
+
+    @patch("gh_remote._prompt_menu", return_value=2)
+    @patch("gh_remote._has_gh", return_value=True)
+    @patch("gh_remote._detect_via_gh_cli", return_value=None)
+    @patch("gh_remote.detect_github_remotes", return_value=[])
+    def test_skip_choice(self, _det, _gh_cli, _has_gh, _menu):
+        result = gh_remote.detect_or_create(Path("/tmp/fake"))
+        assert result["status"] == "declined"
+
+    @patch("gh_remote._prompt_menu", return_value=None)
+    @patch("gh_remote._has_gh", return_value=True)
+    @patch("gh_remote._detect_via_gh_cli", return_value=None)
+    @patch("gh_remote.detect_github_remotes", return_value=[])
+    def test_cancelled_menu(self, _det, _gh_cli, _has_gh, _menu):
+        result = gh_remote.detect_or_create(Path("/tmp/fake"))
+        assert result["status"] == "declined"
+
+
 class TestSelectRemote:
     def test_prefers_origin(self):
         remotes = [

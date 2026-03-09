@@ -181,6 +181,98 @@ def _prompt_yes_no(question: str, default: bool = True) -> bool:
     return answer in ("y", "yes")
 
 
+def _prompt_menu(options: list[str]) -> int | None:
+    """Display a numbered menu and return the selected index (0-based), or None."""
+    try:
+        for i, option in enumerate(options, 1):
+            print(f"  {i}. {option}")
+        choice = input("  Choose [1]: ").strip()
+        if not choice:
+            return 0
+        idx = int(choice) - 1
+        if 0 <= idx < len(options):
+            return idx
+        print(f"  Invalid choice: {choice}", file=sys.stderr)
+        return None
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+    except ValueError:
+        print("  Invalid input.", file=sys.stderr)
+        return None
+
+
+def _prompt_owner_repo() -> tuple[str, str] | None:
+    """Prompt user for an existing GitHub owner/repo."""
+    try:
+        slug = input("  GitHub repository (owner/repo): ").strip()
+        if "/" not in slug:
+            print("  Expected format: owner/repo", file=sys.stderr)
+            return None
+        parts = slug.split("/", 1)
+        owner, repo = parts[0].strip(), parts[1].strip()
+        if not owner or not repo:
+            print("  Expected format: owner/repo", file=sys.stderr)
+            return None
+        return owner, repo
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+
+
+def connect_existing(owner: str, repo: str, remote_name: str = "origin") -> dict[str, str] | None:
+    """Connect to an existing GitHub repository by adding a git remote.
+
+    Validates the repo exists via ``gh``, then runs ``git remote add``.
+    Returns a remote dict on success, None on failure.
+    """
+    if not validate_remote(owner, repo):
+        print(
+            f"  Cannot access {owner}/{repo} — check the name and your permissions.",
+            file=sys.stderr,
+        )
+        return None
+
+    url = f"git@github.com:{owner}/{repo}.git"
+
+    # Check if remote name already exists
+    existing = _run(["git", "remote", "get-url", remote_name])
+    if existing.returncode == 0:
+        print(f"  Remote '{remote_name}' already exists ({existing.stdout.strip()}).")
+        print(f"  Updating URL to {url}...")
+        result = _run(["git", "remote", "set-url", remote_name, url])
+    else:
+        result = _run(["git", "remote", "add", remote_name, url])
+
+    if result.returncode != 0:
+        print(f"  Failed to configure remote: {result.stderr.strip()}", file=sys.stderr)
+        return None
+
+    return {
+        "name": remote_name,
+        "url": url,
+        "owner": owner,
+        "repo": repo,
+    }
+
+
+def _prompt_new_branch() -> str | None:
+    """Optionally prompt user to create a new branch (e.g. for a second machine setup)."""
+    try:
+        branch = input("  Create a new branch? (leave blank to stay on current): ").strip()
+        if not branch:
+            return None
+        result = _run(["git", "checkout", "-b", branch])
+        if result.returncode != 0:
+            print(f"  Failed to create branch: {result.stderr.strip()}", file=sys.stderr)
+            return None
+        print(f"  Switched to new branch '{branch}'.")
+        return branch
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+
+
 def _prompt_repo_name() -> tuple[str, str] | None:
     """Prompt user for repository details for creation."""
     try:
@@ -251,7 +343,7 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
 
     Returns:
         {
-            "status": "found" | "created" | "skipped" | "declined" | "error",
+            "status": "found" | "created" | "connected" | "skipped" | "declined" | "error",
             "remote": {"name": ..., "url": ..., "owner": ..., "repo": ...} | null,
             "validated": true/false,
             "message": "human-readable summary"
@@ -304,28 +396,66 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
             ),
         }
 
-    # Step 3: Prompt or auto-create
-    if auto_create == "auto":
-        should_create = True
-    else:
-        # auto_create == "prompt"
-        print()
-        print("No GitHub remote detected.")
-        should_create = _prompt_yes_no("  Create a new GitHub repository?")
-
-    if not should_create:
-        return {
-            "status": "declined",
-            "remote": None,
-            "validated": False,
-            "message": "User declined repository creation. Local-only mode.",
-        }
-
-    # Step 4: Get repo details and create
+    # Step 3: Auto-create or present interactive menu
     if auto_create == "auto":
         name = Path.cwd().name
         visibility = "private"
-    else:
+        remote = create_repo(name, visibility)
+        if not remote:
+            return {
+                "status": "error",
+                "remote": None,
+                "validated": False,
+                "message": "Failed to create GitHub repository.",
+            }
+        validated = validate_remote(remote["owner"], remote["repo"])
+        return {
+            "status": "created",
+            "remote": remote,
+            "validated": validated,
+            "message": f"Created {visibility} repository: {remote['owner']}/{remote['repo']}",
+        }
+
+    # Interactive menu: connect / create / skip
+    print()
+    print("No GitHub remote detected.")
+    choice = _prompt_menu(
+        [
+            "Connect to an existing GitHub repository",
+            "Create a new GitHub repository",
+            "Skip (local-only mode)",
+        ]
+    )
+
+    # Connect to existing
+    if choice == 0:
+        details = _prompt_owner_repo()
+        if not details:
+            return {
+                "status": "declined",
+                "remote": None,
+                "validated": False,
+                "message": "Connection cancelled.",
+            }
+        owner, repo = details
+        remote = connect_existing(owner, repo, preferred_remote)
+        if not remote:
+            return {
+                "status": "error",
+                "remote": None,
+                "validated": False,
+                "message": f"Failed to connect to {owner}/{repo}.",
+            }
+        _prompt_new_branch()
+        return {
+            "status": "connected",
+            "remote": remote,
+            "validated": True,
+            "message": f"Connected to existing repository: {owner}/{repo}",
+        }
+
+    # Create new
+    if choice == 1:
         details = _prompt_repo_name()
         if not details:
             return {
@@ -335,22 +465,28 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
                 "message": "Repository creation cancelled.",
             }
         name, visibility = details
-
-    remote = create_repo(name, visibility)
-    if not remote:
+        remote = create_repo(name, visibility)
+        if not remote:
+            return {
+                "status": "error",
+                "remote": None,
+                "validated": False,
+                "message": "Failed to create GitHub repository.",
+            }
+        validated = validate_remote(remote["owner"], remote["repo"])
         return {
-            "status": "error",
-            "remote": None,
-            "validated": False,
-            "message": "Failed to create GitHub repository.",
+            "status": "created",
+            "remote": remote,
+            "validated": validated,
+            "message": f"Created {visibility} repository: {remote['owner']}/{remote['repo']}",
         }
 
-    validated = validate_remote(remote["owner"], remote["repo"])
+    # Skip or invalid/cancelled
     return {
-        "status": "created",
-        "remote": remote,
-        "validated": validated,
-        "message": f"Created {visibility} repository: {remote['owner']}/{remote['repo']}",
+        "status": "declined",
+        "remote": None,
+        "validated": False,
+        "message": "GitHub integration skipped. Local-only mode.",
     }
 
 
@@ -370,7 +506,7 @@ def main():
             print(f"  Remote: {r['name']} -> {r['owner']}/{r['repo']}")
             print(f"  Validated: {result['validated']}")
 
-    sys.exit(0 if result["status"] in ("found", "created", "skipped") else 1)
+    sys.exit(0 if result["status"] in ("found", "created", "connected", "skipped") else 1)
 
 
 if __name__ == "__main__":
