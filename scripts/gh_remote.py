@@ -73,6 +73,10 @@ def _parse_github_url(url: str) -> tuple[str, str] | None:
 def detect_github_remotes() -> list[dict[str, str]]:
     """Detect all GitHub remotes from git config.
 
+    Tries two approaches for each remote:
+    1. Parse the raw URL from ``git remote -v``
+    2. Resolve via ``git remote get-url <name>`` (handles ``url.<base>.insteadOf``)
+
     Returns a list of dicts with keys: name, url, owner, repo.
     """
     result = _run(["git", "remote", "-v"])
@@ -88,6 +92,16 @@ def detect_github_remotes() -> list[dict[str, str]]:
     github_remotes = []
     for name, url in remotes.items():
         parsed = _parse_github_url(url)
+
+        # Fallback: resolve effective URL (handles insteadOf rewrites).
+        if not parsed:
+            resolved = _run(["git", "remote", "get-url", name])
+            if resolved.returncode == 0:
+                effective_url = resolved.stdout.strip()
+                parsed = _parse_github_url(effective_url)
+                if parsed:
+                    url = effective_url
+
         if parsed:
             github_remotes.append(
                 {
@@ -99,6 +113,39 @@ def detect_github_remotes() -> list[dict[str, str]]:
             )
 
     return github_remotes
+
+
+def _detect_via_gh_cli() -> dict[str, str] | None:
+    """Last-resort detection: ask ``gh`` to identify the repo from the working directory.
+
+    ``gh repo view --json`` auto-detects the GitHub repo even when the remote
+    URL doesn't look like a standard GitHub URL (e.g. custom SSH aliases).
+
+    Returns a remote dict or None.
+    """
+    if not _has_gh():
+        return None
+    result = _run(["gh", "repo", "view", "--json", "owner,name,url"])
+    if result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+        owner = (
+            data["owner"]["login"]
+            if isinstance(data.get("owner"), dict)
+            else str(data.get("owner", ""))
+        )
+        repo_name = data.get("name", "")
+        if not owner or not repo_name:
+            return None
+        return {
+            "name": "origin",
+            "url": data.get("url", ""),
+            "owner": owner,
+            "repo": repo_name,
+        }
+    except (json.JSONDecodeError, KeyError):
+        return None
 
 
 def select_remote(
@@ -216,6 +263,13 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
 
     # Step 1: Detect existing GitHub remotes
     remotes = detect_github_remotes()
+
+    # Step 1b: Fallback — ask gh CLI to identify the repo from the working directory.
+    if not remotes:
+        gh_detected = _detect_via_gh_cli()
+        if gh_detected:
+            remotes = [gh_detected]
+
     if remotes:
         remote = select_remote(remotes, preferred_remote)
         validated = validate_remote(remote["owner"], remote["repo"])

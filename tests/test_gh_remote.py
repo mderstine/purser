@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -53,9 +53,10 @@ class TestDetectGithubRemotes:
     @patch("gh_remote._run")
     def test_finds_github_remotes(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
-            [], 0,
+            [],
+            0,
             stdout="origin\tgit@github.com:myorg/myrepo.git (fetch)\n"
-                   "origin\tgit@github.com:myorg/myrepo.git (push)\n",
+            "origin\tgit@github.com:myorg/myrepo.git (push)\n",
             stderr="",
         )
         remotes = gh_remote.detect_github_remotes()
@@ -67,11 +68,12 @@ class TestDetectGithubRemotes:
     @patch("gh_remote._run")
     def test_multiple_remotes(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
-            [], 0,
+            [],
+            0,
             stdout="origin\tgit@github.com:org1/repo1.git (fetch)\n"
-                   "origin\tgit@github.com:org1/repo1.git (push)\n"
-                   "upstream\thttps://github.com/org2/repo2.git (fetch)\n"
-                   "upstream\thttps://github.com/org2/repo2.git (push)\n",
+            "origin\tgit@github.com:org1/repo1.git (push)\n"
+            "upstream\thttps://github.com/org2/repo2.git (fetch)\n"
+            "upstream\thttps://github.com/org2/repo2.git (push)\n",
             stderr="",
         )
         remotes = gh_remote.detect_github_remotes()
@@ -83,9 +85,10 @@ class TestDetectGithubRemotes:
     @patch("gh_remote._run")
     def test_skips_non_github(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
-            [], 0,
+            [],
+            0,
             stdout="origin\tgit@gitlab.com:org/repo.git (fetch)\n"
-                   "origin\tgit@gitlab.com:org/repo.git (push)\n",
+            "origin\tgit@gitlab.com:org/repo.git (push)\n",
             stderr="",
         )
         remotes = gh_remote.detect_github_remotes()
@@ -99,9 +102,118 @@ class TestDetectGithubRemotes:
 
     @patch("gh_remote._run")
     def test_handles_git_failure(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess([], 128, stdout="", stderr="not a git repo")
+        mock_run.return_value = subprocess.CompletedProcess(
+            [], 128, stdout="", stderr="not a git repo"
+        )
         remotes = gh_remote.detect_github_remotes()
         assert len(remotes) == 0
+
+
+class TestDetectGithubRemotesGetUrlFallback:
+    """Tests for the git remote get-url fallback (insteadOf rewrites)."""
+
+    @patch("gh_remote._run")
+    def test_resolves_insteadof_rewrite(self, mock_run):
+        """When raw URL isn't GitHub but resolved URL is, detect it."""
+
+        def side_effect(cmd, **kwargs):
+            if cmd == ["git", "remote", "-v"]:
+                return subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout="origin\tgh:myorg/myrepo (fetch)\norigin\tgh:myorg/myrepo (push)\n",
+                    stderr="",
+                )
+            if cmd == ["git", "remote", "get-url", "origin"]:
+                return subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout="git@github.com:myorg/myrepo.git\n",
+                    stderr="",
+                )
+            return subprocess.CompletedProcess([], 1, stdout="", stderr="")
+
+        mock_run.side_effect = side_effect
+        remotes = gh_remote.detect_github_remotes()
+        assert len(remotes) == 1
+        assert remotes[0]["owner"] == "myorg"
+        assert remotes[0]["repo"] == "myrepo"
+        assert remotes[0]["url"] == "git@github.com:myorg/myrepo.git"
+
+    @patch("gh_remote._run")
+    def test_get_url_failure_skips(self, mock_run):
+        """If get-url also fails, the remote is skipped."""
+
+        def side_effect(cmd, **kwargs):
+            if cmd == ["git", "remote", "-v"]:
+                return subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout="origin\tgh:myorg/myrepo (fetch)\n",
+                    stderr="",
+                )
+            # get-url fails too
+            return subprocess.CompletedProcess([], 1, stdout="", stderr="error")
+
+        mock_run.side_effect = side_effect
+        remotes = gh_remote.detect_github_remotes()
+        assert len(remotes) == 0
+
+
+class TestDetectViaGhCli:
+    @patch("gh_remote._has_gh", return_value=True)
+    @patch("gh_remote._run")
+    def test_detects_repo_from_gh(self, mock_run, _):
+        mock_run.return_value = subprocess.CompletedProcess(
+            [],
+            0,
+            stdout='{"owner":{"login":"myorg"},"name":"myrepo","url":"https://github.com/myorg/myrepo"}',
+            stderr="",
+        )
+        result = gh_remote._detect_via_gh_cli()
+        assert result is not None
+        assert result["owner"] == "myorg"
+        assert result["repo"] == "myrepo"
+
+    @patch("gh_remote._has_gh", return_value=False)
+    def test_returns_none_without_gh(self, _):
+        assert gh_remote._detect_via_gh_cli() is None
+
+    @patch("gh_remote._has_gh", return_value=True)
+    @patch("gh_remote._run")
+    def test_returns_none_on_failure(self, mock_run, _):
+        mock_run.return_value = subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="not a github repo"
+        )
+        assert gh_remote._detect_via_gh_cli() is None
+
+    @patch("gh_remote._has_gh", return_value=True)
+    @patch("gh_remote._run")
+    def test_returns_none_on_bad_json(self, mock_run, _):
+        mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="not json", stderr="")
+        assert gh_remote._detect_via_gh_cli() is None
+
+
+class TestDetectOrCreateGhFallback:
+    @patch("gh_remote._detect_via_gh_cli")
+    @patch("gh_remote.validate_remote", return_value=True)
+    @patch("gh_remote.detect_github_remotes", return_value=[])
+    def test_uses_gh_fallback_when_no_remotes(self, mock_detect, mock_validate, mock_gh):
+        mock_gh.return_value = {
+            "name": "origin",
+            "url": "https://github.com/org/repo",
+            "owner": "org",
+            "repo": "repo",
+        }
+        result = gh_remote.detect_or_create(Path("/tmp/fake"))
+        assert result["status"] == "found"
+        assert result["remote"]["owner"] == "org"
+
+    @patch("gh_remote._detect_via_gh_cli", return_value=None)
+    @patch("gh_remote.detect_github_remotes", return_value=[])
+    def test_falls_through_when_gh_fails(self, mock_detect, mock_gh):
+        result = gh_remote.detect_or_create(Path("/tmp/fake"), check_only=True)
+        assert result["status"] == "skipped"
 
 
 class TestSelectRemote:
@@ -137,30 +249,44 @@ class TestDetectOrCreate:
     @patch("gh_remote.detect_github_remotes")
     def test_found_remote(self, mock_detect, mock_validate):
         mock_detect.return_value = [
-            {"name": "origin", "url": "git@github.com:org/repo.git", "owner": "org", "repo": "repo"},
+            {
+                "name": "origin",
+                "url": "git@github.com:org/repo.git",
+                "owner": "org",
+                "repo": "repo",
+            },
         ]
         result = gh_remote.detect_or_create(Path("/tmp/fake"))
         assert result["status"] == "found"
         assert result["remote"]["owner"] == "org"
         assert result["validated"] is True
 
+    @patch("gh_remote._detect_via_gh_cli", return_value=None)
     @patch("gh_remote.detect_github_remotes", return_value=[])
     @patch("gh_remote._has_gh", return_value=False)
-    def test_no_remote_no_gh(self, mock_gh, mock_detect):
+    def test_no_remote_no_gh(self, mock_gh, mock_detect, _):
         result = gh_remote.detect_or_create(Path("/tmp/fake"))
         assert result["status"] == "skipped"
         assert "gh CLI" in result["message"]
 
+    @patch("gh_remote._detect_via_gh_cli", return_value=None)
     @patch("gh_remote.detect_github_remotes", return_value=[])
-    def test_check_only_skips(self, mock_detect):
+    def test_check_only_skips(self, mock_detect, _):
         result = gh_remote.detect_or_create(Path("/tmp/fake"), check_only=True)
         assert result["status"] == "skipped"
 
+    @patch("gh_remote._detect_via_gh_cli", return_value=None)
     @patch("gh_remote.config.load_config")
     @patch("gh_remote.detect_github_remotes", return_value=[])
-    def test_auto_create_skip(self, mock_detect, mock_config):
+    def test_auto_create_skip(self, mock_detect, mock_config, _):
         mock_config.return_value = {
-            "github": {"remote": "origin", "auto_create": "skip", "owner": "", "repo": "", "project_number": ""},
+            "github": {
+                "remote": "origin",
+                "auto_create": "skip",
+                "owner": "",
+                "repo": "",
+                "project_number": "",
+            },
             "labels": {"bootstrap": "false"},
         }
         result = gh_remote.detect_or_create(Path("/tmp/fake"))
