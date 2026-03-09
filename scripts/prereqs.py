@@ -15,6 +15,12 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cli_utils import setup_logging  # noqa: E402
+
+logger = setup_logging(__name__)
 
 
 def _detect_platform() -> str:
@@ -209,22 +215,22 @@ def check_prerequisites() -> dict:
 
 def print_report(result: dict) -> None:
     """Print a human-readable prerequisite report."""
-    print(f"Platform: {result['platform']}")
-    print()
+    logger.info("Platform: %s", result["platform"])
+    logger.info("")
 
     for tool in result["tools"]:
         if tool["found"]:
-            print(f"  [ok]      {tool['name']}: {tool['version']}")
+            logger.info("  [ok]      %s: %s", tool["name"], tool["version"])
         else:
-            print(f"  [MISSING] {tool['name']}: {tool['description']}")
-            print(f"            Install: {tool['install']}")
+            logger.warning("  [MISSING] %s: %s", tool["name"], tool["description"])
+            logger.warning("            Install: %s", tool["install"])
 
-    print()
+    logger.info("")
     if result["all_ok"]:
-        print("All prerequisites satisfied.")
+        logger.info("All prerequisites satisfied.")
     else:
         missing = [t["name"] for t in result["tools"] if not t["found"]]
-        print(f"Missing {len(missing)} prerequisite(s): {', '.join(missing)}")
+        logger.warning("Missing %d prerequisite(s): %s", len(missing), ", ".join(missing))
 
 
 def main():

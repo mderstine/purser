@@ -6,22 +6,24 @@ via sys.path.insert in each script.
 """
 
 import json
+import logging
 import re
 import subprocess
-import sys
 
 try:
     import config as _config
 except ImportError:
     _config = None
 
+logger = logging.getLogger(__name__)
+
 
 def run(cmd, capture=True):
     """Run a command (list of args) and return stdout."""
     result = subprocess.run(cmd, capture_output=capture, text=True)
     if result.returncode != 0 and capture:
-        print(f"  ERROR: {cmd}", file=sys.stderr)
-        print(f"  {result.stderr.strip()}", file=sys.stderr)
+        logger.error("  ERROR: %s", cmd)
+        logger.error("  %s", result.stderr.strip())
     return result.stdout.strip() if capture else ""
 
 

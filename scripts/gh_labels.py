@@ -14,7 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cli_utils import require_commands, require_gh_auth
+from cli_utils import require_commands, require_gh_auth, setup_logging  # noqa: E402
+
+logger = setup_logging(__name__)
 
 # ─── Label definitions ──────────────────────────────────────────────────────
 
@@ -54,37 +56,37 @@ def get_existing_labels() -> set[str]:
 def create_label(name: str, color: str, description: str, *, dry_run: bool) -> None:
     """Create a single GitHub label."""
     if dry_run:
-        print(f"  would create: {name} ({description})")
+        logger.info("  would create: %s (%s)", name, description)
     else:
         subprocess.run(
             ["gh", "label", "create", name, "--color", color, "--description", description],
             capture_output=True,
         )
-        print(f"  created: {name}")
+        logger.info("  created: %s", name)
 
 
 def setup_labels(*, dry_run: bool = False) -> None:
     """Create all beads GitHub labels, skipping any that already exist."""
     existing = get_existing_labels()
 
-    print("=== Beads GitHub Label Setup ===")
-    print()
+    logger.info("=== Beads GitHub Label Setup ===")
+    logger.info("")
 
     current_category = ""
     for category, name, color, description in LABELS:
         if category != current_category:
             if current_category:
-                print()
-            print(f"{category}:")
+                logger.info("")
+            logger.info("%s:", category)
             current_category = category
 
         if name in existing:
-            print(f"  skip: {name} (exists)")
+            logger.info("  skip: %s (exists)", name)
         else:
             create_label(name, color, description, dry_run=dry_run)
 
-    print()
-    print("Done.")
+    logger.info("")
+    logger.info("Done.")
 
 
 def main() -> None:

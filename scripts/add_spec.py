@@ -8,7 +8,10 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib import slugify
+from cli_utils import setup_logging  # noqa: E402
+from lib import slugify  # noqa: E402
+
+logger = setup_logging(__name__)
 
 
 def draft_spec(title, description):
@@ -36,7 +39,7 @@ def draft_spec(title, description):
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: add_spec.py <title> <description>")
+        logger.error("Usage: add_spec.py <title> <description>")
         sys.exit(1)
     title = sys.argv[1]
     description = sys.argv[2]
@@ -45,7 +48,7 @@ def main():
     out_path.parent.mkdir(exist_ok=True)
     with open(out_path, "w") as f:
         f.write(draft_spec(title, description))
-    print(f"Spec saved to {out_path}")
+    logger.info("Spec saved to %s", out_path)
 
 
 if __name__ == "__main__":

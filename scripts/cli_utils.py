@@ -13,6 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 
 def require_commands(commands: list[str]) -> None:
     """Verify that all required CLI commands are available on PATH.
@@ -22,7 +24,7 @@ def require_commands(commands: list[str]) -> None:
     missing = [cmd for cmd in commands if shutil.which(cmd) is None]
     if missing:
         for cmd in missing:
-            print(f"Error: {cmd} not found on PATH", file=sys.stderr)
+            logger.error("Error: %s not found on PATH", cmd)
         sys.exit(1)
 
 
@@ -39,10 +41,10 @@ def require_gh_auth() -> None:
             timeout=15,
         )
         if result.returncode != 0:
-            print("Error: gh CLI not authenticated. Run: gh auth login", file=sys.stderr)
+            logger.error("Error: gh CLI not authenticated. Run: gh auth login")
             sys.exit(1)
     except FileNotFoundError:
-        print("Error: gh not found on PATH", file=sys.stderr)
+        logger.error("Error: gh not found on PATH")
         sys.exit(1)
 
 
