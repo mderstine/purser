@@ -46,26 +46,30 @@ def _has_gh() -> bool:
     return shutil.which("gh") is not None
 
 
-def _parse_github_url(url: str) -> tuple[str, str] | None:
-    """Extract owner/repo from a GitHub remote URL.
+def _parse_github_url(url: str) -> tuple[str, str, str] | None:
+    """Extract host, owner, and repo from a GitHub-style remote URL.
+
+    Works with any hostname (github.com, GitHub Enterprise, etc.).
 
     Handles:
-        git@github.com:owner/repo.git
-        https://github.com/owner/repo.git
-        https://github.com/owner/repo
-        ssh://git@github.com/owner/repo.git
+        git@<host>:owner/repo.git
+        https://<host>/owner/repo.git
+        https://<host>/owner/repo
+        ssh://git@<host>/owner/repo.git
+
+    Returns ``(host, owner, repo)`` or ``None``.
     """
     url = url.strip().rstrip("/").removesuffix(".git")
 
-    # SSH: git@github.com:owner/repo
-    match = re.match(r"git@github\.com:([^/]+)/([^/]+)$", url)
+    # SSH shorthand: git@<host>:owner/repo
+    match = re.match(r"git@([^:]+):([^/]+)/([^/]+)$", url)
     if match:
-        return match.group(1), match.group(2)
+        return match.group(1), match.group(2), match.group(3)
 
-    # HTTPS or SSH URL: *github.com/owner/repo
-    match = re.match(r"(?:https?|ssh)://(?:[^@]+@)?github\.com/([^/]+)/([^/]+)$", url)
+    # HTTPS or SSH URL: <scheme>://<host>/owner/repo
+    match = re.match(r"(?:https?|ssh)://(?:[^@]+@)?([^/]+)/([^/]+)/([^/]+)$", url)
     if match:
-        return match.group(1), match.group(2)
+        return match.group(1), match.group(2), match.group(3)
 
     return None
 
@@ -77,7 +81,7 @@ def detect_github_remotes() -> list[dict[str, str]]:
     1. Parse the raw URL from ``git remote -v``
     2. Resolve via ``git remote get-url <name>`` (handles ``url.<base>.insteadOf``)
 
-    Returns a list of dicts with keys: name, url, owner, repo.
+    Returns a list of dicts with keys: name, url, host, owner, repo.
     """
     result = _run(["git", "remote", "-v"])
     if result.returncode != 0:
@@ -103,12 +107,14 @@ def detect_github_remotes() -> list[dict[str, str]]:
                     url = effective_url
 
         if parsed:
+            host, owner, repo = parsed
             github_remotes.append(
                 {
                     "name": name,
                     "url": url,
-                    "owner": parsed[0],
-                    "repo": parsed[1],
+                    "host": host,
+                    "owner": owner,
+                    "repo": repo,
                 }
             )
 
@@ -138,9 +144,13 @@ def _detect_via_gh_cli() -> dict[str, str] | None:
         repo_name = data.get("name", "")
         if not owner or not repo_name:
             return None
+        url = data.get("url", "")
+        parsed = _parse_github_url(url)
+        host = parsed[0] if parsed else "github.com"
         return {
             "name": "origin",
-            "url": data.get("url", ""),
+            "url": url,
+            "host": host,
             "owner": owner,
             "repo": repo_name,
         }
@@ -251,6 +261,7 @@ def connect_existing(owner: str, repo: str, remote_name: str = "origin") -> dict
     return {
         "name": remote_name,
         "url": url,
+        "host": "github.com",  # TODO(purser-2wb): use detected hostname
         "owner": owner,
         "repo": repo,
     }
@@ -325,9 +336,13 @@ def create_repo(name: str, visibility: str = "private") -> dict[str, str] | None
 
     try:
         data = json.loads(result.stdout)
+        url = data.get("url", "")
+        parsed = _parse_github_url(url)
+        host = parsed[0] if parsed else "github.com"
         return {
             "name": "origin",
-            "url": data.get("url", ""),
+            "url": url,
+            "host": host,
             "owner": data["owner"]["login"]
             if isinstance(data.get("owner"), dict)
             else str(data.get("owner", "")),

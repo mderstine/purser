@@ -14,27 +14,36 @@ import gh_remote
 class TestParseGithubUrl:
     def test_ssh_url(self):
         result = gh_remote._parse_github_url("git@github.com:owner/repo.git")
-        assert result == ("owner", "repo")
+        assert result == ("github.com", "owner", "repo")
 
     def test_ssh_url_no_git_suffix(self):
         result = gh_remote._parse_github_url("git@github.com:owner/repo")
-        assert result == ("owner", "repo")
+        assert result == ("github.com", "owner", "repo")
 
     def test_https_url(self):
         result = gh_remote._parse_github_url("https://github.com/owner/repo.git")
-        assert result == ("owner", "repo")
+        assert result == ("github.com", "owner", "repo")
 
     def test_https_url_no_git_suffix(self):
         result = gh_remote._parse_github_url("https://github.com/owner/repo")
-        assert result == ("owner", "repo")
+        assert result == ("github.com", "owner", "repo")
 
     def test_ssh_protocol_url(self):
         result = gh_remote._parse_github_url("ssh://git@github.com/owner/repo.git")
-        assert result == ("owner", "repo")
+        assert result == ("github.com", "owner", "repo")
 
-    def test_non_github_url_returns_none(self):
+    def test_ghe_ssh_url(self):
+        result = gh_remote._parse_github_url("git@github.corp.example.com:org/project.git")
+        assert result == ("github.corp.example.com", "org", "project")
+
+    def test_ghe_https_url(self):
+        result = gh_remote._parse_github_url("https://github.wellsfargo.com/team/app.git")
+        assert result == ("github.wellsfargo.com", "team", "app")
+
+    def test_gitlab_url_parses(self):
+        """Host-agnostic parsing works for any git hosting provider."""
         result = gh_remote._parse_github_url("git@gitlab.com:owner/repo.git")
-        assert result is None
+        assert result == ("gitlab.com", "owner", "repo")
 
     def test_empty_string_returns_none(self):
         result = gh_remote._parse_github_url("")
@@ -42,11 +51,11 @@ class TestParseGithubUrl:
 
     def test_trailing_whitespace(self):
         result = gh_remote._parse_github_url("  https://github.com/owner/repo.git  ")
-        assert result == ("owner", "repo")
+        assert result == ("github.com", "owner", "repo")
 
     def test_trailing_slash(self):
         result = gh_remote._parse_github_url("https://github.com/owner/repo/")
-        assert result == ("owner", "repo")
+        assert result == ("github.com", "owner", "repo")
 
 
 class TestDetectGithubRemotes:
@@ -62,6 +71,7 @@ class TestDetectGithubRemotes:
         remotes = gh_remote.detect_github_remotes()
         assert len(remotes) == 1
         assert remotes[0]["name"] == "origin"
+        assert remotes[0]["host"] == "github.com"
         assert remotes[0]["owner"] == "myorg"
         assert remotes[0]["repo"] == "myrepo"
 
@@ -83,7 +93,8 @@ class TestDetectGithubRemotes:
         assert "upstream" in names
 
     @patch("gh_remote._run")
-    def test_skips_non_github(self, mock_run):
+    def test_detects_any_git_host(self, mock_run):
+        """Host-agnostic parsing detects remotes on any git hosting provider."""
         mock_run.return_value = subprocess.CompletedProcess(
             [],
             0,
@@ -92,7 +103,8 @@ class TestDetectGithubRemotes:
             stderr="",
         )
         remotes = gh_remote.detect_github_remotes()
-        assert len(remotes) == 0
+        assert len(remotes) == 1
+        assert remotes[0]["host"] == "gitlab.com"
 
     @patch("gh_remote._run")
     def test_handles_no_remotes(self, mock_run):
@@ -136,6 +148,7 @@ class TestDetectGithubRemotesGetUrlFallback:
         mock_run.side_effect = side_effect
         remotes = gh_remote.detect_github_remotes()
         assert len(remotes) == 1
+        assert remotes[0]["host"] == "github.com"
         assert remotes[0]["owner"] == "myorg"
         assert remotes[0]["repo"] == "myrepo"
         assert remotes[0]["url"] == "git@github.com:myorg/myrepo.git"
@@ -172,8 +185,24 @@ class TestDetectViaGhCli:
         )
         result = gh_remote._detect_via_gh_cli()
         assert result is not None
+        assert result["host"] == "github.com"
         assert result["owner"] == "myorg"
         assert result["repo"] == "myrepo"
+
+    @patch("gh_remote._has_gh", return_value=True)
+    @patch("gh_remote._run")
+    def test_detects_ghe_repo(self, mock_run, _):
+        mock_run.return_value = subprocess.CompletedProcess(
+            [],
+            0,
+            stdout='{"owner":{"login":"team"},"name":"app",'
+            '"url":"https://github.corp.example.com/team/app"}',
+            stderr="",
+        )
+        result = gh_remote._detect_via_gh_cli()
+        assert result is not None
+        assert result["host"] == "github.corp.example.com"
+        assert result["owner"] == "team"
 
     @patch("gh_remote._has_gh", return_value=False)
     def test_returns_none_without_gh(self, _):
