@@ -21,6 +21,11 @@ Timeout:
 Batch mode (unattended):
     --batch                 # Exit immediately on timeout or error instead of pausing for input
                             # Useful for VS Code tasks, CI, and cron jobs
+
+Agent backend:
+    --agent=claude          # Use Claude Code CLI (default)
+    --agent=vscode          # Use VS Code GitHub Copilot Agents (no claude CLI required)
+    PURSER_AGENT=vscode     # Same via environment variable (flag takes precedence)
 """
 
 import contextlib
@@ -119,15 +124,16 @@ def _signal_handler(signum: int, _frame: object) -> None:
 # ─── Argument parsing ────────────────────────────────────────────────────────
 
 
-def _parse_args(argv: list[str]) -> tuple[str, int, str, bool, list[str]]:
+def _parse_args(argv: list[str]) -> tuple[str, int, str, bool, str, list[str]]:
     """Parse CLI arguments.
 
-    Returns: (mode, max_iterations, timeout_override, batch, passthrough_args)
+    Returns: (mode, max_iterations, timeout_override, batch, agent, passthrough_args)
     """
     mode = "build"
     max_iterations = 0
     timeout_override = ""
     batch = False
+    agent = os.environ.get("PURSER_AGENT", "claude")
     passthrough_args: list[str] = []
 
     for arg in argv:
@@ -147,10 +153,12 @@ def _parse_args(argv: list[str]) -> tuple[str, int, str, bool, list[str]]:
             passthrough_args.append(arg)
         elif arg.startswith("--timeout="):
             timeout_override = arg.split("=", 1)[1]
+        elif arg.startswith("--agent="):
+            agent = arg.split("=", 1)[1]
         elif arg.isdigit():
             max_iterations = int(arg)
 
-    return mode, max_iterations, timeout_override, batch, passthrough_args
+    return mode, max_iterations, timeout_override, batch, agent, passthrough_args
 
 
 # ─── Single-shot modes ───────────────────────────────────────────────────────
@@ -222,18 +230,32 @@ def _run_delegate(mode: str, passthrough_args: list[str]) -> None:
 # ─── Pre-flight checks ───────────────────────────────────────────────────────
 
 
-def _preflight_checks() -> None:
+def _preflight_checks(*, agent: str = "claude") -> None:
     """Run pre-flight checks. Exits on fatal errors, warns on non-fatal issues."""
     errors = 0
 
-    # 1. bd CLI available
+    # 1. bd CLI available (always required)
     if shutil.which("bd") is None:
         logger.error("bd (beads) CLI not found. Install with: npm install -g @beads/bd")
         errors += 1
 
-    # 2. claude CLI available
-    if shutil.which("claude") is None:
-        logger.error("claude CLI not found. Install Claude Code to continue.")
+    # 2. Agent CLI available
+    if agent == "claude":
+        if shutil.which("claude") is None:
+            logger.error("claude CLI not found. Install Claude Code to continue.")
+            logger.error("Alternatively, run with --agent=vscode to use VS Code Copilot.")
+            errors += 1
+    elif agent == "vscode":
+        if shutil.which("code") is None:
+            logger.warning(
+                "'code' CLI not found on PATH — VS Code may not be installed "
+                "or shell integration not enabled."
+            )
+            logger.warning(
+                "The loop will still write session files; open them manually in VS Code Copilot."
+            )
+    else:
+        logger.error("Unknown agent: %r. Supported values: claude, vscode", agent)
         errors += 1
 
     # 3. beads database accessible
@@ -331,7 +353,7 @@ def main(argv: list[str] | None = None) -> None:
     if argv is None:
         argv = sys.argv[1:]
 
-    mode, max_iterations, timeout_override, batch, passthrough_args = _parse_args(argv)
+    mode, max_iterations, timeout_override, batch, agent, passthrough_args = _parse_args(argv)
 
     # Install signal handlers (Unix only — Windows doesn't support SIGTERM handler well)
     signal.signal(signal.SIGINT, _signal_handler)
@@ -365,10 +387,11 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     # ─── Pre-flight ──────────────────────────────────────────────────────
-    _preflight_checks()
+    _preflight_checks(agent=agent)
 
     logger.info("=== Purser Loop ===")
     logger.info("Mode: %s", mode)
+    logger.info("Agent: %s", agent)
     logger.info("Prompt: %s", prompt_file.name)
     logger.info("Max iterations: %s", max_iterations or "unlimited")
     logger.info("Iteration timeout: %ds", iter_timeout)
