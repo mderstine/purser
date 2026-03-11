@@ -17,6 +17,10 @@ Timeout:
     --timeout=VALUE         # Override per-iteration timeout in seconds (e.g. 900)
     PURSER_TIMEOUT=VALUE    # Same via environment variable
     Defaults: build=900s (15m), plan=600s (10m)
+
+Batch mode (unattended):
+    --batch                 # Exit immediately on timeout or error instead of pausing for input
+                            # Useful for VS Code tasks, CI, and cron jobs
 """
 
 import contextlib
@@ -115,14 +119,15 @@ def _signal_handler(signum: int, _frame: object) -> None:
 # ─── Argument parsing ────────────────────────────────────────────────────────
 
 
-def _parse_args(argv: list[str]) -> tuple[str, int, str, list[str]]:
+def _parse_args(argv: list[str]) -> tuple[str, int, str, bool, list[str]]:
     """Parse CLI arguments.
 
-    Returns: (mode, max_iterations, timeout_override, passthrough_args)
+    Returns: (mode, max_iterations, timeout_override, batch, passthrough_args)
     """
     mode = "build"
     max_iterations = 0
     timeout_override = ""
+    batch = False
     passthrough_args: list[str] = []
 
     for arg in argv:
@@ -136,6 +141,8 @@ def _parse_args(argv: list[str]) -> tuple[str, int, str, list[str]]:
             mode = "triage"
         elif arg == "changelog":
             mode = "changelog"
+        elif arg == "--batch":
+            batch = True
         elif arg == "--dry-run":
             passthrough_args.append(arg)
         elif arg.startswith("--timeout="):
@@ -143,7 +150,7 @@ def _parse_args(argv: list[str]) -> tuple[str, int, str, list[str]]:
         elif arg.isdigit():
             max_iterations = int(arg)
 
-    return mode, max_iterations, timeout_override, passthrough_args
+    return mode, max_iterations, timeout_override, batch, passthrough_args
 
 
 # ─── Single-shot modes ───────────────────────────────────────────────────────
@@ -324,7 +331,7 @@ def main(argv: list[str] | None = None) -> None:
     if argv is None:
         argv = sys.argv[1:]
 
-    mode, max_iterations, timeout_override, passthrough_args = _parse_args(argv)
+    mode, max_iterations, timeout_override, batch, passthrough_args = _parse_args(argv)
 
     # Install signal handlers (Unix only — Windows doesn't support SIGTERM handler well)
     signal.signal(signal.SIGINT, _signal_handler)
@@ -365,6 +372,8 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Prompt: %s", prompt_file.name)
     logger.info("Max iterations: %s", max_iterations or "unlimited")
     logger.info("Iteration timeout: %ds", iter_timeout)
+    if batch:
+        logger.info("Batch mode: enabled (exit on timeout/error)")
     logger.info("========================")
 
     # Ensure logs directory exists
@@ -495,6 +504,9 @@ def main(argv: list[str] | None = None) -> None:
                 "!!! TIMEOUT: Iteration %d exceeded %ds limit !!!", _iteration, iter_timeout
             )
             logger.info("The claimed beads issue has been left in_progress for retry.")
+            if batch:
+                logger.info("Batch mode: exiting on timeout.")
+                break
             print("Press Enter to retry or Ctrl+C to stop.")
             try:
                 input()
@@ -502,6 +514,9 @@ def main(argv: list[str] | None = None) -> None:
                 break
         elif exit_code != 0:
             logger.warning("Claude exited with code %d. Pausing for review.", exit_code)
+            if batch:
+                logger.info("Batch mode: exiting on error.")
+                break
             print("Press Enter to continue or Ctrl+C to stop.")
             try:
                 input()
