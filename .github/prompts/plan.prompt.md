@@ -2,10 +2,9 @@
 mode: agent
 description: Run the Purser planning loop. Read all specs and create a dependency-aware task graph using beads (bd).
 tools:
-  - run_terminal_cmd
-  - read_file
-  - list_dir
-  - file_search
+  - execute
+  - read
+  - search
 ---
 
 Run the Purser planning loop. Read all specs in `specs/` and create a dependency-aware task graph using beads (`bd`).

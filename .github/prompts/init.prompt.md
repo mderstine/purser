@@ -2,9 +2,8 @@
 mode: agent
 description: Initialize a new Purser project. Run the init script and guide the user through setup.
 tools:
-  - run_terminal_cmd
-  - read_file
-  - list_dir
+  - execute
+  - read
 ---
 
 Initialize a new Purser project in the current directory. Run the init script and guide the user through setup.

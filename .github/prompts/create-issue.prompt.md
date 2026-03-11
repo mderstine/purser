@@ -2,7 +2,8 @@
 mode: agent
 description: Create a new beads issue from the provided description.
 tools:
-  - run_terminal_cmd
+  - execute
+  - read
 ---
 
 Create a new beads issue from the provided description: ${input:description}

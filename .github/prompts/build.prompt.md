@@ -2,13 +2,10 @@
 mode: agent
 description: Run one iteration of the Purser build loop. Implement exactly ONE task, then stop.
 tools:
-  - run_terminal_cmd
-  - read_file
-  - write_file
-  - edit_file
-  - list_dir
-  - file_search
-  - grep_search
+  - execute
+  - read
+  - edit
+  - search
 ---
 
 Run one iteration of the Purser build loop. Implement exactly ONE task, then stop.

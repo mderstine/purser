@@ -2,9 +2,9 @@
 mode: agent
 description: Create a new spec file in specs/ from the provided description.
 tools:
-  - write_file
-  - read_file
-  - list_dir
+  - read
+  - edit
+  - search
 ---
 
 Create a new spec file in `specs/` from the provided description: ${input:description}

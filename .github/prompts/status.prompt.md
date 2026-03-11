@@ -2,7 +2,7 @@
 mode: agent
 description: Give a project status report from the beads tracker.
 tools:
-  - run_terminal_cmd
+  - execute
 ---
 
 Give a project status report from the beads tracker.
