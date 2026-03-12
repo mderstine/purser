@@ -407,6 +407,93 @@ class TestDetectOrSetupMenu:
         assert result["status"] == "declined"
 
 
+def _fields_response(has_status: bool) -> dict:
+    """Build a mock _gql response for the fields query."""
+    nodes = []
+    if has_status:
+        nodes.append({"id": "FIELD_1", "name": "Status", "options": []})
+    return {"data": {"node": {"fields": {"nodes": nodes}}}}
+
+
+class TestConfigureStatusField:
+    """Tests for _configure_status_field() — creates or updates Status field."""
+
+    @patch("gh_project_setup._gql")
+    def test_absent_creates_status_field(self, mock_gql):
+        """When no Status field exists, createProjectV2Field mutation is called."""
+        mock_gql.side_effect = [
+            _fields_response(has_status=False),
+            {
+                "data": {
+                    "createProjectV2Field": {
+                        "projectV2Field": {"id": "F_new", "name": "Status", "options": []}
+                    }
+                }
+            },
+        ]
+        gh_project_setup._configure_status_field("PVT_1")
+        assert mock_gql.call_count == 2
+        create_query = mock_gql.call_args_list[1][0][0]
+        assert "createProjectV2Field" in create_query
+        assert "SINGLE_SELECT" in create_query
+        assert "Status" in create_query
+
+    @patch("gh_project_setup._gql")
+    def test_present_updates_status_field(self, mock_gql):
+        """When Status field already exists, updateProjectV2Field is called, not create."""
+        mock_gql.side_effect = [
+            _fields_response(has_status=True),
+            {"data": {"updateProjectV2Field": {"projectV2Field": {"options": []}}}},
+        ]
+        gh_project_setup._configure_status_field("PVT_1")
+        assert mock_gql.call_count == 2
+        update_query = mock_gql.call_args_list[1][0][0]
+        assert "updateProjectV2Field" in update_query
+        assert "createProjectV2Field" not in update_query
+
+    @patch("gh_project_setup._gql", return_value=None)
+    def test_query_failure_logs_warning(self, mock_gql, caplog):
+        """When the fields query fails, a warning is logged and no second call is made."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="gh_project_setup"):
+            gh_project_setup._configure_status_field("PVT_1")
+        assert mock_gql.call_count == 1
+        assert any(r.levelname == "WARNING" for r in caplog.records)
+
+    @patch("gh_project_setup._gql")
+    def test_create_failure_logs_warning(self, mock_gql, caplog):
+        """When Status field is absent and createProjectV2Field fails, a warning is logged."""
+        import logging
+
+        mock_gql.side_effect = [
+            _fields_response(has_status=False),
+            None,  # create mutation fails
+        ]
+        with caplog.at_level(logging.WARNING, logger="gh_project_setup"):
+            gh_project_setup._configure_status_field("PVT_1")
+        assert mock_gql.call_count == 2
+        assert any(r.levelname == "WARNING" for r in caplog.records)
+
+    @patch("gh_project_setup._gql")
+    def test_absent_configures_all_default_columns(self, mock_gql):
+        """When creating the Status field, all DEFAULT_COLUMNS are included in the query."""
+        mock_gql.side_effect = [
+            _fields_response(has_status=False),
+            {
+                "data": {
+                    "createProjectV2Field": {
+                        "projectV2Field": {"id": "F_new", "name": "Status", "options": []}
+                    }
+                }
+            },
+        ]
+        gh_project_setup._configure_status_field("PVT_1")
+        create_query = mock_gql.call_args_list[1][0][0]
+        for col in gh_project_setup.DEFAULT_COLUMNS:
+            assert col["name"] in create_query
+
+
 class TestPromptMenu:
     @patch("builtins.input", return_value="")
     def test_default_is_first(self, _):
