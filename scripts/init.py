@@ -225,37 +225,15 @@ def step_github_project(owner: str, repo: str, *, skip_github: bool) -> str:
         logger.info("")
         return ""
 
-    # First, check non-interactively
-    result = gh_project_setup.detect_or_setup(owner, repo, check_only=True)
+    result = gh_project_setup.detect_or_setup(owner, repo, check_only=False)
 
-    if result["status"] == "found" and result["project"]:
+    if result["status"] in ("found", "created") and result["project"]:
         project = result["project"]
-        logger.info("  Found GitHub Project: %s (#%s)", project["title"], project["number"])
+        logger.info("  %s", result["message"])
         logger.info("")
         return str(project["number"])
 
-    if result["status"] == "skipped":
-        # No projects found — offer to create one interactively
-        logger.info("  No GitHub Projects found.")
-        try:
-            answer = input("  Create a new project with default columns? [Y/n]: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            logger.info("")
-            answer = "n"
-
-        if not answer or answer.lower().startswith("y"):
-            project = gh_project_setup.create_project(owner, repo)
-            if project:
-                logger.info("  Created GitHub Project #%s", project["number"])
-                logger.info("")
-                return str(project["number"])
-            logger.warning("  WARNING: Failed to create project.")
-        else:
-            logger.info("  Skipped project creation.")
-
-    else:
-        logger.info("  GitHub Project: %s", result["status"])
-
+    logger.info("  %s", result["message"])
     logger.info("")
     return ""
 

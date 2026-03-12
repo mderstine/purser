@@ -162,9 +162,7 @@ class TestStepBeadsDb:
 
     @patch("init._run")
     @patch("shutil.which", return_value="/usr/bin/bd")
-    def test_reinit_beads_proceeds_when_confirmed(
-        self, _, mock_run, monkeypatch, tmp_path, caplog
-    ):
+    def test_reinit_beads_proceeds_when_confirmed(self, _, mock_run, monkeypatch, tmp_path, caplog):
         monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
         (tmp_path / ".beads").mkdir()
         mock_run.return_value = MagicMock(returncode=0)
@@ -239,9 +237,52 @@ class TestStepGithubProject:
         mock_setup.detect_or_setup.return_value = {
             "status": "found",
             "project": {"title": "Purser", "number": 42},
+            "message": "Found project: Purser (#42)",
         }
         result = init.step_github_project("owner", "repo", skip_github=False)
         assert result == "42"
+        mock_setup.detect_or_setup.assert_called_once_with("owner", "repo", check_only=False)
+
+    @patch("init.gh_project_setup")
+    def test_returns_project_number_when_created(self, mock_setup):
+        mock_setup.detect_or_setup.return_value = {
+            "status": "created",
+            "project": {"title": "Purser", "number": 7},
+            "message": "Created project: Purser (#7)",
+        }
+        result = init.step_github_project("owner", "repo", skip_github=False)
+        assert result == "7"
+
+    @patch("init.gh_project_setup")
+    def test_returns_empty_when_declined(self, mock_setup):
+        mock_setup.detect_or_setup.return_value = {
+            "status": "declined",
+            "project": None,
+            "message": "GitHub Projects setup skipped.",
+        }
+        result = init.step_github_project("owner", "repo", skip_github=False)
+        assert result == ""
+
+    @patch("init.gh_project_setup")
+    def test_returns_empty_when_error(self, mock_setup):
+        mock_setup.detect_or_setup.return_value = {
+            "status": "error",
+            "project": None,
+            "message": "Failed to create GitHub Project.",
+        }
+        result = init.step_github_project("owner", "repo", skip_github=False)
+        assert result == ""
+
+    @patch("init.gh_project_setup")
+    def test_delegates_to_detect_or_setup_not_check_only(self, mock_setup):
+        """step_github_project must call detect_or_setup with check_only=False."""
+        mock_setup.detect_or_setup.return_value = {
+            "status": "skipped",
+            "project": None,
+            "message": "No GitHub Projects found.",
+        }
+        init.step_github_project("owner", "repo", skip_github=False)
+        mock_setup.detect_or_setup.assert_called_once_with("owner", "repo", check_only=False)
 
 
 class TestStepLabels:
