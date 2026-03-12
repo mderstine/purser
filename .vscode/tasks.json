@@ -32,6 +32,19 @@
       "problemMatcher": []
     },
     {
+      "label": "Purser: Build (VS Code Copilot)",
+      "type": "shell",
+      "command": "uv run purser-loop 1 --agent=vscode --batch",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Purser: Plan",
       "type": "shell",
       "command": "uv run purser-loop plan 1",
