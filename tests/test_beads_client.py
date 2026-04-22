@@ -16,7 +16,9 @@ class StubBeadsClient(BeadsClient):
 
 
 def test_show_accepts_nested_issue_shape() -> None:
-    client = StubBeadsClient([{"output": [{"issue": {"id": "bd-1", "title": "One", "status": "open"}}]}])
+    client = StubBeadsClient(
+        [{"output": [{"issue": {"id": "bd-1", "title": "One", "status": "open"}}]}]
+    )
 
     bead = client.show("bd-1")
 
@@ -26,7 +28,9 @@ def test_show_accepts_nested_issue_shape() -> None:
 
 
 def test_create_accepts_nested_items_shape() -> None:
-    client = StubBeadsClient([{"data": {"items": [{"id": "bd-2", "title": "Two", "status": "in-review"}]}}])
+    client = StubBeadsClient(
+        [{"data": {"items": [{"id": "bd-2", "title": "Two", "status": "in-review"}]}}]
+    )
 
     bead = client.create("Two")
 

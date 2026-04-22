@@ -54,13 +54,16 @@ class RolesConfig:
     planner_prompt: str | None = None
     executor_prompt: str | None = None
     reviewer_prompt: str | None = None
+    timeout_seconds: int = 600
     models: RolesModelsConfig = field(default_factory=RolesModelsConfig)
 
 
 @dataclass(slots=True)
 class CompletionConfig:
     require_empty_ready: bool = True
-    forbid_open_statuses: list[str] = field(default_factory=lambda: ["open", "in-progress", "in_review", "in-review"])
+    forbid_open_statuses: list[str] = field(
+        default_factory=lambda: ["open", "in-progress", "in_review", "in-review"]
+    )
 
 
 @dataclass(slots=True)
@@ -101,7 +104,9 @@ class ConfigError(RuntimeError):
     pass
 
 
-def load_config(root: Path | None = None, config_path: str = DEFAULT_CONFIG_PATH) -> PurserConfig:
+def load_config(
+    root: Path | None = None, config_path: str = DEFAULT_CONFIG_PATH
+) -> PurserConfig:
     resolved_root = (root or Path.cwd()).resolve()
     path = resolved_root / config_path
     if not path.exists():
@@ -140,6 +145,7 @@ def load_config(root: Path | None = None, config_path: str = DEFAULT_CONFIG_PATH
             planner_prompt=roles.get("planner_prompt"),
             executor_prompt=roles.get("executor_prompt"),
             reviewer_prompt=roles.get("reviewer_prompt"),
+            timeout_seconds=int(roles.get("timeout_seconds", 600)),
             models=RolesModelsConfig(
                 planner=roles_models.get("planner", "anthropic/claude-opus-4-7"),
                 executor=roles_models.get("executor", "groq/llama-3.3-70b"),
@@ -148,7 +154,9 @@ def load_config(root: Path | None = None, config_path: str = DEFAULT_CONFIG_PATH
         ),
         completion=CompletionConfig(
             require_empty_ready=bool(completion.get("require_empty_ready", True)),
-            forbid_open_statuses=list(completion.get("forbid_open_statuses", ["open", "in-review"])),
+            forbid_open_statuses=list(
+                completion.get("forbid_open_statuses", ["open", "in-review"])
+            ),
         ),
         planner=PlannerConfig(
             spec_output_dir=planner.get("spec_output_dir", DEFAULT_SPEC_OUTPUT_DIR),
@@ -166,5 +174,7 @@ def validate_config(config: PurserConfig) -> None:
         raise ConfigError("loop.max_iterations_per_bead must be >= 1")
     if config.gates.timeout_seconds < 1:
         raise ConfigError("gates.timeout_seconds must be >= 1")
+    if config.roles.timeout_seconds < 1:
+        raise ConfigError("roles.timeout_seconds must be >= 1")
     if config.beads.auto_commit not in {"off", "on", "batch"}:
         raise ConfigError("beads.auto_commit must be one of: off, on, batch")

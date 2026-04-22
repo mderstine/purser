@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 import json
 import subprocess
 
@@ -42,12 +43,20 @@ class BeadsClient:
             check=False,
         )
         if check and completed.returncode != 0:
-            message = completed.stderr.strip() or completed.stdout.strip() or f"bd failed: {' '.join(command)}"
+            message = (
+                completed.stderr.strip()
+                or completed.stdout.strip()
+                or f"bd failed: {' '.join(command)}"
+            )
             raise BeadsError(message)
         return parse_bd_json_output(completed.stdout)
 
     def ready(self, limit: int = 10) -> list[Bead]:
         raw = self._run("ready", "--limit", str(limit))
+        return [self._coerce_bead(item) for item in _items_from_json(raw)]
+
+    def list_all(self) -> list[Bead]:
+        raw = self._run("list")
         return [self._coerce_bead(item) for item in _items_from_json(raw)]
 
     def list_by_statuses(self, statuses: list[str]) -> list[Bead]:
@@ -66,7 +75,9 @@ class BeadsClient:
         self._run("update", bead_id, "--claim")
         return self.show(bead_id)
 
-    def update_status(self, bead_id: str, status: str, notes: str | None = None) -> Bead:
+    def update_status(
+        self, bead_id: str, status: str, notes: str | None = None
+    ) -> Bead:
         args = ["update", bead_id, "--status", normalize_status(status)]
         if notes:
             args += ["--append-notes", notes]
@@ -93,7 +104,15 @@ class BeadsClient:
     def comment(self, bead_id: str, text: str) -> None:
         self._run("comments", "add", bead_id, text)
 
-    def create(self, title: str, *, description: str | None = None, acceptance: str | None = None, spec_id: str | None = None, deps: list[str] | None = None) -> Bead:
+    def create(
+        self,
+        title: str,
+        *,
+        description: str | None = None,
+        acceptance: str | None = None,
+        spec_id: str | None = None,
+        deps: list[str] | None = None,
+    ) -> Bead:
         args = ["create", title]
         if description:
             args += ["--description", description]
@@ -123,10 +142,22 @@ class BeadsClient:
 
     @staticmethod
     def _coerce_bead(item: dict) -> Bead:
-        bead_id = item.get("id") or item.get("issue_id") or item.get("key")
-        title = item.get("title") or item.get("name") or bead_id
-        status = normalize_status(item.get("status") or item.get("state") or "unknown")
-        return Bead(id=bead_id, title=title, status=status, raw=item)
+        bead_id_value = item.get("id") or item.get("issue_id") or item.get("key")
+        if not isinstance(bead_id_value, str) or not bead_id_value.strip():
+            raise BeadsError(f"Unparseable bead payload missing string id: {item}")
+        title_value = item.get("title") or item.get("name") or bead_id_value
+        title = (
+            title_value
+            if isinstance(title_value, str) and title_value.strip()
+            else bead_id_value
+        )
+        status_value = item.get("status") or item.get("state") or "unknown"
+        status = normalize_status(
+            status_value if isinstance(status_value, str) else "unknown"
+        )
+        return Bead(
+            id=bead_id_value, title=title, status=status, raw=cast(dict[str, Any], item)
+        )
 
 
 def normalize_status(status: str) -> str:
@@ -178,6 +209,8 @@ def _items_from_json(raw: dict | list | str) -> list[dict]:
             return [raw]
         for key in ["issue", "issues", "items", "data", "results", "output", "value"]:
             value = raw.get(key)
+            if value is None:
+                continue
             items = _items_from_json(value)
             if items:
                 return items
@@ -185,4 +218,6 @@ def _items_from_json(raw: dict | list | str) -> list[dict]:
 
 
 def _is_issue_like_dict(value: object) -> bool:
-    return isinstance(value, dict) and any(key in value for key in ["id", "issue_id", "key"])
+    return isinstance(value, dict) and any(
+        key in value for key in ["id", "issue_id", "key"]
+    )

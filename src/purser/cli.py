@@ -6,13 +6,25 @@ import shutil
 import sys
 
 from .beads import BeadsError
-from .config import ConfigError, DEFAULT_CONFIG_PATH, DEFAULT_PROMPTS_DIR, PurserConfig, load_config
+from .config import (
+    ConfigError,
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_PROMPTS_DIR,
+    PurserConfig,
+    load_config,
+)
 from .gates import GateFailure
 from .loop import PurserLoop
 from .planner import PlannerService
 from .resources import write_default_prompts
 from .roles import RoleExecutionError
-from .runtime import collect_binary_statuses, ensure_local_beads_context, format_beads_context_status, format_binary_status, prompt_health
+from .runtime import (
+    collect_binary_statuses,
+    ensure_local_beads_context,
+    format_beads_context_status,
+    format_binary_status,
+    prompt_health,
+)
 
 
 DEFAULT_CONFIG_TEMPLATE = """[project]
@@ -40,6 +52,7 @@ auto_commit = \"on\"
 planner_prompt = \".purser/prompts/planner.md\"
 executor_prompt = \".purser/prompts/executor.md\"
 reviewer_prompt = \".purser/prompts/reviewer.md\"
+timeout_seconds = 600
 
 [roles.models]
 planner = \"anthropic/claude-opus-4-7\"
@@ -59,20 +72,29 @@ def build_parser() -> argparse.ArgumentParser:
     init = subparsers.add_parser("init", help="write starter config and prompt files")
     init.add_argument("--force", action="store_true")
 
-    intake = subparsers.add_parser("planner-intake-spec", help="read a spec and optionally synthesize an improved markdown version")
+    intake = subparsers.add_parser(
+        "planner-intake-spec",
+        help="read a spec and optionally synthesize an improved markdown version",
+    )
     intake.add_argument("spec", type=Path)
     intake.add_argument("--synthesize", choices=["true", "false"], default="false")
     intake.add_argument("--output", type=Path)
 
-    plan = subparsers.add_parser("planner-plan", help="decompose a spec into beads and dependencies")
+    plan = subparsers.add_parser(
+        "planner-plan", help="decompose a spec into beads and dependencies"
+    )
     plan.add_argument("spec", type=Path)
 
     build = subparsers.add_parser("exec-build", help="execute one bead, then review it")
     build.add_argument("bead_id", nargs="?")
 
-    build_all = subparsers.add_parser("exec-build-all", help="run the executor/reviewer loop until completion")
+    subparsers.add_parser(
+        "exec-build-all", help="run the executor/reviewer loop until completion"
+    )
 
-    subparsers.add_parser("doctor", help="check local purser, Beads, Dolt, Pi, and config health")
+    subparsers.add_parser(
+        "doctor", help="check local purser, Beads, Dolt, Pi, and config health"
+    )
 
     return parser
 
@@ -96,9 +118,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     config_path = root / DEFAULT_CONFIG_PATH
     prompts_dir = root / DEFAULT_PROMPTS_DIR
     if config_path.exists() and not args.force:
-        raise SystemExit(f"Refusing to overwrite existing config: {config_path} (use --force)")
+        raise SystemExit(
+            f"Refusing to overwrite existing config: {config_path} (use --force)"
+        )
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(DEFAULT_CONFIG_TEMPLATE.format(project_name=root.name), encoding="utf-8")
+    config_path.write_text(
+        DEFAULT_CONFIG_TEMPLATE.format(project_name=root.name), encoding="utf-8"
+    )
     written = write_default_prompts(prompts_dir)
     print(f"wrote {config_path}")
     for path in written:
@@ -110,7 +136,9 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_planner_intake_spec(args: argparse.Namespace) -> int:
     config = load_runtime_config()
     service = PlannerService(config)
-    result = service.intake_spec(args.spec, synthesize=args.synthesize == "true", output_path=args.output)
+    result = service.intake_spec(
+        args.spec, synthesize=args.synthesize == "true", output_path=args.output
+    )
     if result.output_path:
         print(result.output_path)
     if result.role_result.final_text:
@@ -198,7 +226,14 @@ def main() -> None:
         raise SystemExit(dispatch())
     except SystemExit:
         raise
-    except (ConfigError, FileNotFoundError, RuntimeError, RoleExecutionError, BeadsError, GateFailure) as exc:
+    except (
+        ConfigError,
+        FileNotFoundError,
+        RuntimeError,
+        RoleExecutionError,
+        BeadsError,
+        GateFailure,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
 

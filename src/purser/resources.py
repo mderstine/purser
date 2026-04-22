@@ -11,7 +11,11 @@ PACKAGE_PROMPTS = {
 
 
 def prompt_resource_text(name: str) -> str:
-    return files("purser.prompts").joinpath(PACKAGE_PROMPTS[name]).read_text(encoding="utf-8")
+    return (
+        files("purser.prompts")
+        .joinpath(PACKAGE_PROMPTS[name])
+        .read_text(encoding="utf-8")
+    )
 
 
 def write_default_prompts(target_dir: Path) -> list[Path]:

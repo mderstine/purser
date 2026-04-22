@@ -34,3 +34,9 @@ purser = ["prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "ruff>=0.15.11",
+]

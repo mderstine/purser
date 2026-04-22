@@ -11,5 +11,15 @@ wheels/
 
 # Beads / Dolt files (added by bd init)
 .dolt/
+.beads/
 *.db
 .beads-credential-key
+
+# Local purser runtime files
+.purser/
+.purser.toml
+VALIDATION.md
+sample-spec.md
+sample-spec-2.md
+HELLO.md
+HELLO2.md

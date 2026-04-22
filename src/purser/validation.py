@@ -21,9 +21,13 @@ class ValidationRecord:
 
 def append_validation_log(path: Path, record: ValidationRecord) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    timestamp = (
+        datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    )
     commits = ", ".join(record.commits or []) or "n/a"
-    verification = "\n".join(f"- {item}" for item in record.verification_items) or "- n/a"
+    verification = (
+        "\n".join(f"- {item}" for item in record.verification_items) or "- n/a"
+    )
     notes = "\n".join(f"- {item}" for item in record.notes) or "- none"
     block = (
         f"## {record.bead_id} — {record.title}\n\n"
@@ -41,4 +45,6 @@ def append_validation_log(path: Path, record: ValidationRecord) -> None:
 
 
 def verification_items_from_gates(results: list[GateResult]) -> list[str]:
-    return [f"{result.name}: {'clean' if result.passed else 'failed'}" for result in results]
+    return [
+        f"{result.name}: {'clean' if result.passed else 'failed'}" for result in results
+    ]

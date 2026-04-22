@@ -39,7 +39,9 @@ def detect_version(name: str, command: list[str]) -> str | None:
         completed = subprocess.run(command, text=True, capture_output=True, check=False)
     except OSError:
         return None
-    text = "\n".join(part for part in [completed.stdout.strip(), completed.stderr.strip()] if part)
+    text = "\n".join(
+        part for part in [completed.stdout.strip(), completed.stderr.strip()] if part
+    )
     match = _VERSION_RE.search(text)
     return match.group(1) if match else (text.splitlines()[0] if text else None)
 
@@ -47,7 +49,9 @@ def detect_version(name: str, command: list[str]) -> str | None:
 def binary_status(name: str) -> BinaryStatus:
     path = find_binary(name)
     if path is None:
-        return BinaryStatus(name=name, path=None, version=None, ok=False, note="missing from PATH")
+        return BinaryStatus(
+            name=name, path=None, version=None, ok=False, note="missing from PATH"
+        )
     if name == "bd":
         version = detect_version(name, [name, "version"])
     elif name == "dolt":
@@ -75,7 +79,13 @@ def format_binary_status(status: BinaryStatus) -> str:
 
 def get_bd_context(root: Path) -> BeadsContext:
     try:
-        completed = subprocess.run(["bd", "context", "--json"], cwd=root, text=True, capture_output=True, check=False)
+        completed = subprocess.run(
+            ["bd", "context", "--json"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
     except OSError as exc:
         raise RuntimeError(f"unable to run 'bd context --json': {exc}") from exc
     output = completed.stdout.strip() or completed.stderr.strip()
@@ -101,7 +111,9 @@ def ensure_local_beads_context(root: Path) -> BeadsContext:
     context = get_bd_context(root)
     expected_root = root.resolve()
     if context.repo_root != expected_root:
-        raise RuntimeError(f"bd context repo root mismatch: expected {expected_root}, got {context.repo_root}")
+        raise RuntimeError(
+            f"bd context repo root mismatch: expected {expected_root}, got {context.repo_root}"
+        )
     if context.backend != "dolt":
         raise RuntimeError(f"unsupported Beads backend for purser: {context.backend}")
     if context.dolt_mode != "embedded":
@@ -110,7 +122,9 @@ def ensure_local_beads_context(root: Path) -> BeadsContext:
             f"found dolt_mode={context.dolt_mode or 'unknown'}"
         )
     if context.beads_dir.parent != expected_root or context.beads_dir.name != ".beads":
-        raise RuntimeError(f"purser requires repo-local .beads storage; found {context.beads_dir}")
+        raise RuntimeError(
+            f"purser requires repo-local .beads storage; found {context.beads_dir}"
+        )
     return context
 
 

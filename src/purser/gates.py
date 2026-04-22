@@ -38,7 +38,9 @@ class GateFailure(RuntimeError):
 
 
 class GatesRunner:
-    def __init__(self, root: Path, config: PurserConfig, beads: BeadsClient | None = None) -> None:
+    def __init__(
+        self, root: Path, config: PurserConfig, beads: BeadsClient | None = None
+    ) -> None:
         self.root = root
         self.config = config
         self.beads = beads

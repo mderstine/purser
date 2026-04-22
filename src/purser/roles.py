@@ -17,6 +17,7 @@ class RoleResult:
     final_text: str
     stderr: str
     stdout: str
+    provider_error: str = ""
 
     @property
     def had_events(self) -> bool:
@@ -31,9 +32,10 @@ class RoleProtocolError(RoleExecutionError):
     pass
 
 
-def parse_json_mode_stdout(stdout: str) -> tuple[list[dict], str]:
+def parse_json_mode_stdout(stdout: str) -> tuple[list[dict], str, str]:
     transcript: list[dict] = []
     final_text = ""
+    provider_error = ""
     streamed_chunks: list[str] = []
     for line in stdout.splitlines():
         line = line.strip()
@@ -52,20 +54,32 @@ def parse_json_mode_stdout(stdout: str) -> tuple[list[dict], str]:
             if isinstance(delta, str) and delta:
                 streamed_chunks.append(delta)
         elif event_type == "message_end":
-            text = _assistant_text_from_message(event.get("message"))
+            message = event.get("message")
+            text = _assistant_text_from_message(message)
             if text:
                 final_text = text
+            elif not provider_error:
+                provider_error = _assistant_error_from_message(message)
         elif event_type == "turn_end":
-            text = _assistant_text_from_message(event.get("message"))
+            message = event.get("message")
+            text = _assistant_text_from_message(message)
             if text:
                 final_text = text
-        elif event_type == "agent_end" and not final_text:
+            elif not provider_error:
+                provider_error = _assistant_error_from_message(message)
+        elif event_type == "agent_end":
             for message in reversed(event.get("messages") or []):
                 text = _assistant_text_from_message(message)
-                if text:
+                if text and not final_text:
                     final_text = text
                     break
-    return transcript, (final_text or "".join(streamed_chunks).strip())
+                if not provider_error:
+                    provider_error = _assistant_error_from_message(message)
+    return (
+        transcript,
+        (final_text or "".join(streamed_chunks).strip()),
+        provider_error.strip(),
+    )
 
 
 def _assistant_text_from_message(message: object) -> str:
@@ -87,6 +101,13 @@ def _assistant_text_from_message(message: object) -> str:
     return ""
 
 
+def _assistant_error_from_message(message: object) -> str:
+    if not isinstance(message, dict) or message.get("role") != "assistant":
+        return ""
+    error_message = message.get("errorMessage")
+    return error_message.strip() if isinstance(error_message, str) else ""
+
+
 class PiRunner:
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -100,6 +121,7 @@ class PiRunner:
         message: str,
         tools: str | None = None,
         extra_args: list[str] | None = None,
+        timeout_seconds: int | None = None,
     ) -> RoleResult:
         command = [
             "pi",
@@ -118,14 +140,22 @@ class PiRunner:
             command += extra_args
         command.append(message)
 
-        completed = subprocess.run(
-            command,
-            cwd=self.root,
-            text=True,
-            capture_output=True,
-            check=False,
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=self.root,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RoleExecutionError(
+                f"pi timed out for role {role} after {timeout_seconds}s"
+            ) from exc
+        transcript, final_text, provider_error = parse_json_mode_stdout(
+            completed.stdout
         )
-        transcript, final_text = parse_json_mode_stdout(completed.stdout)
         result = RoleResult(
             role=role,
             model=model,
@@ -136,11 +166,17 @@ class PiRunner:
             final_text=final_text,
             stderr=completed.stderr.strip(),
             stdout=completed.stdout,
+            provider_error=provider_error,
         )
         if result.exit_code != 0:
-            raise RoleExecutionError(result.stderr or f"pi failed for role {role}")
+            raise RoleExecutionError(
+                result.provider_error or result.stderr or f"pi failed for role {role}"
+            )
         if not result.had_events:
             raise RoleProtocolError(f"pi returned no JSON events for role {role}")
         if not result.final_text:
-            raise RoleProtocolError(f"pi returned no final assistant text for role {role}")
+            raise RoleProtocolError(
+                result.provider_error
+                or f"pi returned no final assistant text for role {role}"
+            )
         return result

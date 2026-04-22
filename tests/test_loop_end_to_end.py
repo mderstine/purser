@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, cast
 
 from purser.beads import Bead, normalize_status
 from purser.config import PurserConfig
@@ -35,10 +36,14 @@ class ScenarioBeads:
     def increment_attempts(self, bead_id: str) -> Bead:
         assert bead_id == self.bead.id
         metadata = self.bead.raw.setdefault("metadata", {})
-        metadata["purser_executor_attempts"] = int(metadata.get("purser_executor_attempts", 0)) + 1
+        metadata["purser_executor_attempts"] = (
+            int(metadata.get("purser_executor_attempts", 0)) + 1
+        )
         return self.bead
 
-    def update_status(self, bead_id: str, status: str, notes: str | None = None) -> Bead:
+    def update_status(
+        self, bead_id: str, status: str, notes: str | None = None
+    ) -> Bead:
         assert bead_id == self.bead.id
         self.notes.append((bead_id, status, notes))
         self.bead.status = status
@@ -98,14 +103,23 @@ class ScenarioGates:
 
     def run_all(self, bead_id: str):
         self.calls += 1
-        result = GateResult(name="tests", command="pytest", exit_code=0, stdout="ok", stderr="")
+        result = GateResult(
+            name="tests", command="pytest", exit_code=0, stdout="ok", stderr=""
+        )
         if self.fail_on_call == self.calls:
-            failed = GateResult(name="tests", command="pytest", exit_code=1, stdout="", stderr="boom")
+            failed = GateResult(
+                name="tests", command="pytest", exit_code=1, stdout="", stderr="boom"
+            )
             raise GateFailure(failed)
         return [result]
 
 
-def _configure_loop(tmp_path: Path, bead: Bead, reviewer_closes: bool = True, fail_on_gate_call: int | None = None) -> tuple[PurserLoop, ScenarioBeads, ScenarioPi, ScenarioGates]:
+def _configure_loop(
+    tmp_path: Path,
+    bead: Bead,
+    reviewer_closes: bool = True,
+    fail_on_gate_call: int | None = None,
+) -> tuple[PurserLoop, ScenarioBeads, ScenarioPi, ScenarioGates]:
     config = PurserConfig(root=tmp_path)
     prompts_dir = tmp_path / ".purser/prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
@@ -117,14 +131,19 @@ def _configure_loop(tmp_path: Path, bead: Bead, reviewer_closes: bool = True, fa
     beads = ScenarioBeads(bead)
     pi = ScenarioPi(beads, reviewer_closes=reviewer_closes)
     gates = ScenarioGates(fail_on_call=fail_on_gate_call)
-    loop.beads = beads
-    loop.pi = pi
-    loop.gates = gates
+    cast(Any, loop).beads = beads
+    cast(Any, loop).pi = pi
+    cast(Any, loop).gates = gates
     return loop, beads, pi, gates
 
 
 def test_run_once_end_to_end_closes_and_logs_validation(tmp_path: Path) -> None:
-    bead = Bead(id="bd-1", title="Add feature", status="open", raw={"metadata": {}, "spec_id": "specs/demo.md §1"})
+    bead = Bead(
+        id="bd-1",
+        title="Add feature",
+        status="open",
+        raw={"metadata": {}, "spec_id": "specs/demo.md §1"},
+    )
     loop, beads, pi, gates = _configure_loop(tmp_path, bead)
 
     processed = loop.run_once()
@@ -148,14 +167,22 @@ def test_run_once_review_rejection_reopens_bead(tmp_path: Path) -> None:
 
     assert processed == "bd-2"
     assert beads.bead.normalized_status == "open"
-    assert any(status == "open" and notes == "Reviewer requested changes" for _, status, notes in beads.notes)
+    assert any(
+        status == "open" and notes == "Reviewer requested changes"
+        for _, status, notes in beads.notes
+    )
     assert not (tmp_path / "VALIDATION.md").exists()
     assert pi.calls == ["executor", "reviewer"]
     assert gates.calls == 2
 
 
 def test_run_all_blocks_bead_at_iteration_cap(tmp_path: Path) -> None:
-    bead = Bead(id="bd-3", title="Stuck bead", status="open", raw={"metadata": {"purser_executor_attempts": 5}})
+    bead = Bead(
+        id="bd-3",
+        title="Stuck bead",
+        status="open",
+        raw={"metadata": {"purser_executor_attempts": 5}},
+    )
     loop, beads, pi, gates = _configure_loop(tmp_path, bead)
     loop.config.loop.max_iterations_per_bead = 5
 
@@ -168,9 +195,18 @@ def test_run_all_blocks_bead_at_iteration_cap(tmp_path: Path) -> None:
     assert gates.calls == 0
 
 
-def test_review_gate_failure_reopens_bead_without_validation_log(tmp_path: Path) -> None:
-    bead = Bead(id="bd-4", title="Gate fail on review", status="in_review", raw={"metadata": {"purser_executor_attempts": 2}})
-    loop, beads, pi, gates = _configure_loop(tmp_path, bead, reviewer_closes=True, fail_on_gate_call=1)
+def test_review_gate_failure_reopens_bead_without_validation_log(
+    tmp_path: Path,
+) -> None:
+    bead = Bead(
+        id="bd-4",
+        title="Gate fail on review",
+        status="in_review",
+        raw={"metadata": {"purser_executor_attempts": 2}},
+    )
+    loop, beads, pi, gates = _configure_loop(
+        tmp_path, bead, reviewer_closes=True, fail_on_gate_call=1
+    )
 
     processed = loop.run_once("bd-4")
 
@@ -178,3 +214,38 @@ def test_review_gate_failure_reopens_bead_without_validation_log(tmp_path: Path)
     assert beads.bead.normalized_status == "open"
     assert not (tmp_path / "VALIDATION.md").exists()
     assert pi.calls == ["reviewer"]
+
+
+class ApprovingScenarioPi(ScenarioPi):
+    def run_role(self, **kwargs):
+        role = kwargs["role"]
+        self.calls.append(role)
+        return RoleResult(
+            role=role,
+            model=kwargs["model"],
+            prompt_path=kwargs["prompt_path"],
+            command=[],
+            exit_code=0,
+            transcript=[{"type": "message_end"}],
+            final_text="Verdict: correct, complete, and cohesive. Approve.",
+            stderr="",
+            stdout='{"type":"message_end"}\n',
+        )
+
+
+def test_review_can_programmatically_close_from_approval_text(tmp_path: Path) -> None:
+    bead = Bead(
+        id="bd-5",
+        title="Approve by text",
+        status="in_review",
+        raw={"metadata": {"purser_executor_attempts": 1}},
+    )
+    loop, beads, _, gates = _configure_loop(tmp_path, bead, reviewer_closes=False)
+    cast(Any, loop).pi = ApprovingScenarioPi(beads, reviewer_closes=False)
+
+    processed = loop.run_once("bd-5")
+
+    assert processed == "bd-5"
+    assert beads.bead.normalized_status == "closed"
+    assert gates.calls == 1
+    assert (tmp_path / "VALIDATION.md").exists()
