@@ -28,9 +28,10 @@ Make the current repository Purser-enabled using best practices for a local deve
 3. The current repo has Purser config and prompt files.
 4. `.purser.toml` is customized for this repo's actual gates and preferred models.
 5. `AGENTS.md` is created or updated with a clearly labeled Purser section explaining Purser's role in the repo.
-6. Local/runtime artifacts are ignored appropriately in `.gitignore`.
-7. `purser doctor` succeeds.
-8. Provide a short summary of what was changed and any follow-up the user should know.
+6. Pi prompt templates are wired so Purser prompts are available as Pi slash commands without duplicating prompt files.
+7. Local/runtime artifacts are ignored appropriately in `.gitignore`.
+8. `purser doctor` succeeds.
+9. Provide a short summary of what was changed and any follow-up the user should know.
 
 ## Suggested workflow
 
@@ -149,7 +150,57 @@ Typical workflow:
 5. Record validation results for completed work.
 ```
 
-### 7. Ensure local/runtime files are ignored
+### 7. Configure Pi prompt-template integration
+
+To make Purser prompts available as Pi slash commands without duplicating files, create a project-local Pi settings file that points at the canonical Purser prompt directory.
+
+Use Purser's canonical prompt directory:
+
+```text
+.purser/prompts/
+```
+
+Create:
+
+```text
+.pi/settings.json
+```
+
+Set its contents to:
+
+```json
+{
+  "prompts": ["../.purser/prompts"]
+}
+```
+
+Ensure each prompt filename matches the desired Pi slash command name. For example:
+
+```text
+.purser/prompts/purser-planner-intake-spec.md
+.purser/prompts/purser-exec-build.md
+.purser/prompts/purser-exec-build-all.md
+```
+
+These become:
+
+```text
+/purser-planner-intake-spec
+/purser-exec-build
+/purser-exec-build-all
+```
+
+After setup, tell the user to reload Pi with:
+
+```text
+/reload
+```
+
+Do not create duplicate copies under `.pi/prompts/` unless you intentionally want Pi-only overrides.
+
+If the repo already has `.pi/settings.json`, merge the `prompts` entry carefully instead of overwriting unrelated settings.
+
+### 8. Ensure local/runtime files are ignored
 
 Add appropriate `.gitignore` entries if missing. Usually:
 
@@ -162,7 +213,7 @@ VALIDATION.md
 
 Only add what makes sense for the repo and local workflow.
 
-### 8. Verify health
+### 9. Verify health
 
 Run:
 
@@ -176,7 +227,7 @@ Success means:
 - prompts exist
 - Beads storage is local embedded mode
 
-### 9. Report final status
+### 10. Report final status
 
 Provide:
 - files created/edited
@@ -194,6 +245,8 @@ Your setup is complete only if all of these are true:
 - `.purser.toml` reflects the repo's actual gates
 - prompt files exist
 - `AGENTS.md` contains a clear Purser section stating that Purser is framework/tooling rather than the repo's primary product
+- `.pi/settings.json` points Pi prompt templates at `.purser/prompts`
+- the user can access Purser prompt templates as Pi slash commands after `/reload`
 - `.gitignore` protects local runtime files where appropriate
 - your final report is concise and explicit
 
@@ -201,7 +254,7 @@ Your setup is complete only if all of these are true:
 
 - Installed/verified: `purser`, `bd`, `dolt`, `pi`
 - Initialized/reused local Beads: yes/no
-- Wrote/updated: `.purser.toml`, prompt files, `AGENTS.md`, `.gitignore`
+- Wrote/updated: `.purser.toml`, prompt files, `AGENTS.md`, `.pi/settings.json`, `.gitignore`
 - Configured gates:
   - lint: `...`
   - types: `...`
