@@ -4,7 +4,7 @@ Use this prompt when you want a general-purpose coding agent to set up **purser*
 
 ---
 
-You are setting up **purser** in the user's current repository. Purser is not the product being built; it is the orchestration framework used to plan, build, and review the repo's actual features.
+You are setting up **purser** in the user's current repository. Purser is not the product being built; it is the orchestration framework used to plan, execute, and review the repo's actual work.
 
 ## Goal
 
@@ -27,9 +27,10 @@ Make the current repository Purser-enabled using best practices for a local deve
 2. The current repo is initialized with local Beads (`bd init`, embedded mode only) unless it is already correctly initialized.
 3. The current repo has Purser config and prompt files.
 4. `.purser.toml` is customized for this repo's actual gates and preferred models.
-5. Local/runtime artifacts are ignored appropriately in `.gitignore`.
-6. `purser doctor` succeeds.
-7. Provide a short summary of what was changed and any follow-up the user should know.
+5. `AGENTS.md` is created or updated with a clearly labeled Purser section explaining Purser's role in the repo.
+6. Local/runtime artifacts are ignored appropriately in `.gitignore`.
+7. `purser doctor` succeeds.
+8. Provide a short summary of what was changed and any follow-up the user should know.
 
 ## Suggested workflow
 
@@ -107,7 +108,48 @@ Best-practice guidance:
 
 Do not invent gates if the repo already defines them clearly.
 
-### 6. Ensure local/runtime files are ignored
+### 6. Create or update `AGENTS.md`
+
+Create `AGENTS.md` if it does not exist, or append to it if it does.
+
+Add a clearly labeled section such as `## Purser workflow` that makes these points explicit:
+- Purser is a planning / execution / review framework used in this repo.
+- **Purser is not the repo's product or primary deliverable unless explicitly requested.**
+- The real goal is to advance the repo's actual work.
+- That work may include software development, bug fixing, documentation, research, data analysis, data discovery, or other scoped deliverables relevant to this repo.
+- Specs should describe the repo's real work, not Purser development work unless explicitly requested.
+- Use Purser as orchestration around the repo's work, not as the work itself.
+- Use repo-local embedded Beads storage only.
+
+A good section to append is:
+
+```md
+## Purser workflow
+
+This repository uses **Purser** as a planning / execution / review framework.
+
+Important:
+- **Purser is not the product or primary deliverable of this repository.**
+- The actual goal is to advance this repository's real work.
+- That work may include software development, bug fixing, documentation, research, data analysis, data discovery, or other scoped deliverables relevant to this repo.
+- Use Purser only as the orchestration layer for that work.
+
+When working in this repo:
+- Treat specs as descriptions of the repository's actual work, not Purser development work unless explicitly requested.
+- Use Purser to decompose specs into Beads, execute scoped work, run gates or other validation where applicable, and review outcomes.
+- Keep scope focused on the requested deliverable in this repository.
+- Respect this repo's actual conventions, workflows, validation methods, and success criteria.
+- Use repo-local embedded Beads storage only; do not use shared or server-backed Beads databases.
+
+Typical workflow:
+1. Write or refine a spec for the desired work in this repo.
+2. Use Purser to plan the work into atomic beads.
+3. Execute one bead at a time against this repo's actual artifacts (code, data, docs, analysis, etc.).
+4. Review for accuracy, atomicity, and elegance/fitness to the repo's goals.
+5. Record validation results for completed work.
+```
+
+### 7. Ensure local/runtime files are ignored
 
 Add appropriate `.gitignore` entries if missing. Usually:
 
@@ -120,7 +162,7 @@ VALIDATION.md
 
 Only add what makes sense for the repo and local workflow.
 
-### 7. Verify health
+### 8. Verify health
 
 Run:
 
@@ -134,7 +176,7 @@ Success means:
 - prompts exist
 - Beads storage is local embedded mode
 
-### 8. Report final status
+### 9. Report final status
 
 Provide:
 - files created/edited
@@ -151,6 +193,7 @@ Your setup is complete only if all of these are true:
 - the repo uses local embedded Beads storage
 - `.purser.toml` reflects the repo's actual gates
 - prompt files exist
+- `AGENTS.md` contains a clear Purser section stating that Purser is framework/tooling rather than the repo's primary product
 - `.gitignore` protects local runtime files where appropriate
 - your final report is concise and explicit
 
@@ -158,7 +201,7 @@ Your setup is complete only if all of these are true:
 
 - Installed/verified: `purser`, `bd`, `dolt`, `pi`
 - Initialized/reused local Beads: yes/no
-- Wrote/updated: `.purser.toml`, prompt files, `.gitignore`
+- Wrote/updated: `.purser.toml`, prompt files, `AGENTS.md`, `.gitignore`
 - Configured gates:
   - lint: `...`
   - types: `...`
