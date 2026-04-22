@@ -37,7 +37,7 @@ The project adopting the orchestrator owns a `.bd-orchestrator.toml` at its repo
 
 ```toml
 [project]
-name = "dex"
+name = "your-project-name"
 language = "python"          # informational; used in default prompt substitution
 
 [gates]
