@@ -3,14 +3,16 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 
-from .config import DEFAULT_CONFIG_PATH, DEFAULT_PROMPTS_DIR, PurserConfig, load_config
+from .beads import BeadsError
+from .config import ConfigError, DEFAULT_CONFIG_PATH, DEFAULT_PROMPTS_DIR, PurserConfig, load_config
+from .gates import GateFailure
 from .loop import PurserLoop
 from .planner import PlannerService
 from .resources import write_default_prompts
-from .runtime import collect_binary_statuses, format_binary_status, prompt_health
+from .roles import RoleExecutionError
+from .runtime import collect_binary_statuses, ensure_local_beads_context, format_beads_context_status, format_binary_status, prompt_health
 
 
 DEFAULT_CONFIG_TEMPLATE = """[project]
@@ -77,14 +79,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def ensure_binary(name: str) -> None:
     if shutil.which(name) is None:
-        raise SystemExit(f"Missing required binary on PATH: {name}")
+        raise RuntimeError(f"Missing required binary on PATH: {name}")
 
 
 def load_runtime_config() -> PurserConfig:
     ensure_binary("bd")
     ensure_binary("dolt")
     ensure_binary("pi")
-    return load_config(Path.cwd())
+    config = load_config(Path.cwd())
+    ensure_local_beads_context(config.root)
+    return config
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -143,28 +147,32 @@ def cmd_exec_build_all(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     del args
+    exit_code = 0
     for status in collect_binary_statuses():
         print(format_binary_status(status))
+        if not status.ok:
+            exit_code = 1
 
     try:
         config = load_config(Path.cwd())
     except Exception as exc:
         print(f"config: error ({exc})")
-        return 1
+        return 1 if exit_code == 0 else exit_code
 
     print(f"config: ok ({config.root / DEFAULT_CONFIG_PATH})")
     print(f"validation_log: {config.validation_log_path}")
     for line in prompt_health(config.root, config):
         print(line)
+        if ": missing file " in line or ": not configured" in line:
+            exit_code = 1
 
     try:
-        completed = subprocess.run(["bd", "context"], cwd=config.root, text=True, capture_output=True, check=False)
-        output = completed.stdout.strip() or completed.stderr.strip()
-        print(f"bd_context: {'ok' if completed.returncode == 0 else 'error'}" + (f" ({output.splitlines()[0]})" if output else ""))
-    except OSError as exc:
-        print(f"bd_context: error ({exc})")
-        return 1
-    return 0
+        context = ensure_local_beads_context(config.root)
+        print(format_beads_context_status(context))
+    except RuntimeError as exc:
+        print(f"beads_storage: error ({exc})")
+        exit_code = 1
+    return exit_code
 
 
 def dispatch(argv: list[str] | None = None) -> int:
@@ -186,7 +194,13 @@ def dispatch(argv: list[str] | None = None) -> int:
 
 
 def main() -> None:
-    raise SystemExit(dispatch())
+    try:
+        raise SystemExit(dispatch())
+    except SystemExit:
+        raise
+    except (ConfigError, FileNotFoundError, RuntimeError, RoleExecutionError, BeadsError, GateFailure) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 def planner_intake_spec_main() -> None:

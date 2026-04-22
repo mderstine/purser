@@ -16,10 +16,75 @@ class RoleResult:
     transcript: list[dict]
     final_text: str
     stderr: str
+    stdout: str
+
+    @property
+    def had_events(self) -> bool:
+        return bool(self.transcript)
 
 
 class RoleExecutionError(RuntimeError):
     pass
+
+
+class RoleProtocolError(RoleExecutionError):
+    pass
+
+
+def parse_json_mode_stdout(stdout: str) -> tuple[list[dict], str]:
+    transcript: list[dict] = []
+    final_text = ""
+    streamed_chunks: list[str] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        transcript.append(event)
+        event_type = event.get("type")
+        if event_type == "message_update":
+            delta = ((event.get("assistantMessageEvent") or {}).get("delta")) or ""
+            if isinstance(delta, str) and delta:
+                streamed_chunks.append(delta)
+        elif event_type == "message_end":
+            text = _assistant_text_from_message(event.get("message"))
+            if text:
+                final_text = text
+        elif event_type == "turn_end":
+            text = _assistant_text_from_message(event.get("message"))
+            if text:
+                final_text = text
+        elif event_type == "agent_end" and not final_text:
+            for message in reversed(event.get("messages") or []):
+                text = _assistant_text_from_message(message)
+                if text:
+                    final_text = text
+                    break
+    return transcript, (final_text or "".join(streamed_chunks).strip())
+
+
+def _assistant_text_from_message(message: object) -> str:
+    if not isinstance(message, dict) or message.get("role") != "assistant":
+        return ""
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts).strip()
+    return ""
 
 
 class PiRunner:
@@ -60,27 +125,7 @@ class PiRunner:
             capture_output=True,
             check=False,
         )
-        transcript: list[dict] = []
-        final_chunks: list[str] = []
-        for line in completed.stdout.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            transcript.append(event)
-            if event.get("type") == "message_update":
-                delta = (((event.get("assistantMessageEvent") or {}).get("delta")) or "")
-                if delta:
-                    final_chunks.append(delta)
-            elif event.get("type") == "message_end":
-                message_obj = event.get("message") or {}
-                if message_obj.get("role") == "assistant":
-                    content = message_obj.get("content")
-                    if isinstance(content, str):
-                        final_chunks = [content]
+        transcript, final_text = parse_json_mode_stdout(completed.stdout)
         result = RoleResult(
             role=role,
             model=model,
@@ -88,9 +133,14 @@ class PiRunner:
             command=command,
             exit_code=completed.returncode,
             transcript=transcript,
-            final_text="".join(final_chunks).strip(),
+            final_text=final_text,
             stderr=completed.stderr.strip(),
+            stdout=completed.stdout,
         )
         if result.exit_code != 0:
             raise RoleExecutionError(result.stderr or f"pi failed for role {role}")
+        if not result.had_events:
+            raise RoleProtocolError(f"pi returned no JSON events for role {role}")
+        if not result.final_text:
+            raise RoleProtocolError(f"pi returned no final assistant text for role {role}")
         return result

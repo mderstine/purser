@@ -43,9 +43,10 @@ class FakePi:
             prompt_path=kwargs["prompt_path"],
             command=[],
             exit_code=0,
-            transcript=[],
+            transcript=[{"type": "message_end"}],
             final_text="ok",
             stderr="",
+            stdout="{}\n",
         )
 
 

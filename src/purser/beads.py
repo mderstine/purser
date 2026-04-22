@@ -42,14 +42,9 @@ class BeadsClient:
             check=False,
         )
         if check and completed.returncode != 0:
-            raise BeadsError(completed.stderr.strip() or completed.stdout.strip() or f"bd failed: {' '.join(command)}")
-        stdout = completed.stdout.strip()
-        if not stdout:
-            return ""
-        try:
-            return json.loads(stdout)
-        except json.JSONDecodeError:
-            return stdout
+            message = completed.stderr.strip() or completed.stdout.strip() or f"bd failed: {' '.join(command)}"
+            raise BeadsError(message)
+        return parse_bd_json_output(completed.stdout)
 
     def ready(self, limit: int = 10) -> list[Bead]:
         raw = self._run("ready", "--limit", str(limit))
@@ -62,14 +57,10 @@ class BeadsClient:
 
     def show(self, bead_id: str) -> Bead:
         raw = self._run("show", bead_id)
-        if isinstance(raw, list):
-            if not raw:
-                raise BeadsError(f"Bead not found: {bead_id}")
-            return self._coerce_bead(raw[0])
-        if isinstance(raw, dict):
-            item = raw.get("issue") or raw
-            return self._coerce_bead(item)
-        raise BeadsError(f"Unexpected bd show output for {bead_id}")
+        items = _items_from_json(raw)
+        if not items:
+            raise BeadsError(f"Bead not found or unparseable output: {bead_id}")
+        return self._coerce_bead(items[0])
 
     def claim(self, bead_id: str) -> Bead:
         self._run("update", bead_id, "--claim")
@@ -113,9 +104,9 @@ class BeadsClient:
         if deps:
             args += ["--deps", ",".join(deps)]
         raw = self._run(*args)
-        if isinstance(raw, dict):
-            item = raw.get("issue") or raw
-            return self._coerce_bead(item)
+        items = _items_from_json(raw)
+        if items:
+            return self._coerce_bead(items[0])
         raise BeadsError("Unexpected bd create output")
 
     def add_block_dependency(self, blocker_id: str, blocked_id: str) -> None:
@@ -149,17 +140,49 @@ def normalize_status(status: str) -> str:
     return aliases.get(value, value)
 
 
+def parse_bd_json_output(stdout: str) -> dict | list | str:
+    text = stdout.strip()
+    if not text:
+        return ""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    parsed_lines: list[dict | list] = []
+    for line in lines:
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            return text
+        if isinstance(value, (dict, list)):
+            parsed_lines.append(value)
+        else:
+            return text
+    if len(parsed_lines) == 1:
+        return parsed_lines[0]
+    return parsed_lines
+
+
 def _items_from_json(raw: dict | list | str) -> list[dict]:
     if isinstance(raw, list):
-        return [item for item in raw if isinstance(item, dict)]
+        direct = [item for item in raw if _is_issue_like_dict(item)]
+        if direct:
+            return direct
+        nested: list[dict] = []
+        for item in raw:
+            nested.extend(_items_from_json(item))
+        return nested
     if isinstance(raw, dict):
-        for key in ["issues", "items", "data", "results"]:
-            value = raw.get(key)
-            if isinstance(value, list):
-                return [item for item in value if isinstance(item, dict)]
-        if any(key in raw for key in ["id", "issue_id", "key"]):
+        if _is_issue_like_dict(raw):
             return [raw]
-        issue = raw.get("issue")
-        if isinstance(issue, dict):
-            return [issue]
+        for key in ["issue", "issues", "items", "data", "results", "output", "value"]:
+            value = raw.get(key)
+            items = _items_from_json(value)
+            if items:
+                return items
     return []
+
+
+def _is_issue_like_dict(value: object) -> bool:
+    return isinstance(value, dict) and any(key in value for key in ["id", "issue_id", "key"])

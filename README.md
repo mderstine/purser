@@ -51,4 +51,16 @@ This verifies:
 - `bd`, `dolt`, and `pi` are on `PATH`
 - local config exists
 - prompt files exist
-- `bd context` can run in the current repo
+- Beads is using a repo-local `.beads/` database
+- Beads/Dolt is in embedded mode, not shared/server mode
+
+## Beads storage policy
+
+`purser` is intentionally strict: it only runs against a repo-local embedded Beads/Dolt database.
+
+That means:
+- supported: `bd init` default embedded mode
+- rejected: `bd init --server`
+- rejected: shared/global server-backed setups
+
+If a repo is configured for server/shared Beads storage, `purser doctor` and runtime commands will fail fast.
