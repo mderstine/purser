@@ -130,13 +130,13 @@ class PlannerService:
 
     def _plan_message(self, spec_abs: Path) -> str:
         approval_line = (
-            "Human approval is required before implementation; optimize for a reviewable plan summary.\n"
+            "Director (human driver) review/approval is required before generating the bead graph; treat this command as being run only after that approval. If approval has not actually happened, stop and ask for it instead of creating beads.\n"
             if self.config.loop.human_approve_plan
             else "Human approval is disabled; proceed with autonomous planning.\n"
         )
         return (
             f"Plan spec: {spec_abs}\n\n"
-            "Read the full spec and decompose it into atomic beads in Beads.\n"
+            "Read the full spec and decompose it into atomic beads in Beads only after director approval of the refined spec/plan.\n"
             "You must actually create the beads in the local Beads database during this run using bd create and bd dep.\n"
             f"Every created bead must include --spec-id {spec_abs}.\n"
             "Create open beads with clear titles, descriptions, acceptance criteria, and dependency edges.\n"

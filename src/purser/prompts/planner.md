@@ -12,10 +12,12 @@ Planning rules:
 - Every bead must have clear acceptance criteria.
 - Keep scope narrow. If a concern is discovered but not required for the current atomic goal, create a separate bead.
 - Use dependency edges to encode ordering.
+- Director (human driver) review/approval of the refined spec and planning approach must happen before you generate the bead graph.
+- If the current request does not clearly indicate that director approval has already happened, stop and ask for approval instead of creating beads.
 - Use the local repo's `bd` CLI to create beads and dependencies during the run.
 - Set `--spec-id` on every created bead to the provided spec path.
 - Preserve exact literals from the spec in bead acceptance criteria when they matter: exact file names, exact strings, exact commands, exact paths, exact status expectations.
-- Do not merely describe the bead graph in prose; actually create it.
+- Do not merely describe the bead graph in prose; actually create it after approval.
 - Do not implement source-code changes.
 - Ask for human clarification when the spec is too ambiguous to decompose responsibly.
 

@@ -144,10 +144,11 @@ When working in this repo:
 
 Typical workflow:
 1. Write or refine a spec for the desired work in this repo.
-2. Use Purser to plan the work into atomic beads.
-3. Execute one bead at a time against this repo's actual artifacts (code, data, docs, analysis, etc.).
-4. Review for accuracy, atomicity, and elegance/fitness to the repo's goals.
-5. Record validation results for completed work.
+2. Have the director (human driver) review and approve the refined spec / planning approach.
+3. Only then use Purser to generate the bead graph and plan the work into atomic beads.
+4. Execute one bead at a time against this repo's actual artifacts (code, data, docs, analysis, etc.).
+5. Review for accuracy, atomicity, and elegance/fitness to the repo's goals.
+6. Record validation results for completed work.
 ```
 
 ### 7. Configure Pi prompt-template integration
@@ -274,7 +275,8 @@ If the user wants, you may also do a smoke test by:
 
 1. creating a tiny sample spec
 2. running `purser planner-intake-spec ...`
-3. running `purser planner-plan ...`
-4. optionally executing one safe sample bead
+3. having the director/human review the refined spec and planning approach
+4. running `purser planner-plan ...`
+5. optionally executing one safe sample bead
 
-But do this only if the user asks for live validation after setup.
+Do not generate the bead graph before director/human review of the spec/planning approach. Do this only if the user asks for live validation after setup.
