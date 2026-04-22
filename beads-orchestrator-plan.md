@@ -1,6 +1,17 @@
 # Beads Orchestrator: A Project-Agnostic Planner → Executor → Reviewer Loop
 
-**Purpose.** Build a standalone, reusable orchestration package — call it `bd-orchestrator` — that drives any Python project forward using three cooperating Pi-hosted agent roles (Planner, Executor, Reviewer) coordinated through Steve Yegge's Beads issue tracker. The package is installed once, runs against any repo that has `bd init`'d, and has zero knowledge of what it's building. Dex will be its first real consumer; LangLang and any future projects can adopt it by dropping in a config file.
+> **Historical design note:** this document describes the original `bd-orchestrator` concept that evolved into **`purser`**. The current implementation is project-agnostic and not tied to Dex or any other specific consumer. When setting up a repo today, prefer the `purser` CLI and current repo docs over the legacy package/config names in this design note.
+>
+> **Current consumer setup (Purser):**
+> 1. Install Purser, e.g. `uv tool install git+https://github.com/mderstine/purser.git`
+> 2. Initialize local embedded Beads in the consumer repo with `bd init`
+> 3. Initialize Purser repo-local config and shipped prompts with `purser init`
+> 4. Edit `.purser.toml` for the repo's real gates and preferred models
+> 5. Create or append `AGENTS.md` with a dedicated Purser workflow section making clear Purser is framework/tooling, not the repo's product
+> 6. Point Pi prompt templates at `.purser/prompts` via `.pi/settings.json`, then run `/reload`
+> 7. Verify with `purser doctor`
+
+**Purpose.** Build a standalone, reusable orchestration package — call it `bd-orchestrator` — that drives any Python project forward using three cooperating Pi-hosted agent roles (Planner, Executor, Reviewer) coordinated through Steve Yegge's Beads issue tracker. The package is installed once, runs against any repo that has `bd init`'d, and has zero knowledge of what it's building. Early discussion used Dex and LangLang as examples, but the intended end state is a project-agnostic orchestrator any repo can adopt by dropping in config and prompts.
 
 The core insight is the same as before: agents are unreliable, but a graph of small verifiable beads with hard machine-checkable gates is not. What changes when we make it project-agnostic is that **the orchestrator itself must not embed any project-specific assumptions** — not the gate commands, not the language, not the role prompts' domain knowledge, not the completion predicate. All of that becomes configuration.
 
@@ -8,7 +19,7 @@ The core insight is the same as before: agents are unreliable, but a graph of sm
 
 ## 1. Package shape
 
-The deliverable is a pip-installable package exposing a single CLI entry point, `bd-orchestrate`, that operates on the current working directory. A project adopts it by doing three things: `bd init` (one-time Beads setup), drop a `.bd-orchestrator.toml` config file at the repo root, and write three role prompt files (or symlink the shipped defaults). That's the whole integration surface.
+The deliverable is a pip-installable package exposing a single CLI entry point, `bd-orchestrate`, that operates on the current working directory. In the current Purser implementation, a project adopts it by doing these equivalent steps: `bd init` (one-time local embedded Beads setup), `purser init` (write `.purser.toml` and shipped prompts), edit `.purser.toml` for the repo's real gates/models, and optionally expose the shipped prompts to Pi via `.pi/settings.json`. That's the whole integration surface.
 
 ```
 bd-orchestrator/
