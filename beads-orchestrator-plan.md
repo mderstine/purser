@@ -1,6 +1,13 @@
-# Beads Orchestrator: A Project-Agnostic Planner → Executor → Reviewer Loop
+# [ARCHIVED DESIGN NOTE] Beads Orchestrator: A Project-Agnostic Planner → Executor → Reviewer Loop
 
-> **Historical design note:** this document describes the original `bd-orchestrator` concept that evolved into **`purser`**. The current implementation is project-agnostic and not tied to Dex or any other specific consumer. When setting up a repo today, prefer the `purser` CLI and current repo docs over the legacy package/config names in this design note.
+> **Historical design note:** this document describes the original `bd-orchestrator` concept that evolved into **`purser`**. It is retained for architecture/history, not as the canonical setup guide.
+>
+> **Canonical setup docs now live here:**
+> - `README.md` for the top-level overview
+> - `docs/consumer-repo-setup.md` for the authoritative consumer-repo integration guide
+> - `docs/purser-adoption-agent-template.md` for an agent handoff/setup template
+>
+> The current implementation is project-agnostic and not tied to Dex or any other specific consumer. When setting up a repo today, prefer the Purser CLI and the docs above over the legacy package/config names in this archived design note.
 >
 > **Current consumer setup (Purser):**
 > 1. Install Purser, e.g. `uv tool install git+https://github.com/mderstine/purser.git`

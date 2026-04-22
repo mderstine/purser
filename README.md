@@ -39,6 +39,27 @@ Purser does not embed Pi or Beads as SDKs.
 
 Project configuration lives at `.purser.toml` in the repo root.
 
+## Using Purser in another repo
+
+Purser is designed to be installed into other repositories as a project-agnostic workflow framework.
+
+Canonical setup guide:
+- [`docs/consumer-repo-setup.md`](docs/consumer-repo-setup.md)
+
+Agent handoff/setup template:
+- [`docs/purser-adoption-agent-template.md`](docs/purser-adoption-agent-template.md)
+
+Short version:
+
+```bash
+uv tool install git+https://github.com/mderstine/purser.git
+cd /path/to/consumer-repo
+bd init
+purser init
+# edit .purser.toml for the repo's real gates/models
+purser doctor
+```
+
 ## Health check
 
 Run:
