@@ -69,6 +69,34 @@ def test_parse_json_mode_stdout_extracts_provider_error() -> None:
     assert provider_error == "provider exploded"
 
 
+def test_pi_runner_omits_model_flag_when_using_pi_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = PiRunner(tmp_path)
+    captured: dict[str, list[str]] = {}
+
+    class Completed:
+        returncode = 0
+        stdout = '{"type":"message_end","message":{"role":"assistant","content":"ok"}}\n'
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        return Completed()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = runner.run_role(
+        role="planner",
+        model=None,
+        prompt_path=tmp_path / "planner.md",
+        message="hi",
+    )
+
+    assert result.model == "<pi-default>"
+    assert "--model" not in captured["command"]
+
+
 def test_pi_runner_timeout_surfaces_clean_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

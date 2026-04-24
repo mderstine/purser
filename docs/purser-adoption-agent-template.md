@@ -4,7 +4,7 @@ Use this prompt when you want a general-purpose coding agent to set up **purser*
 
 ---
 
-You are setting up **purser** in the user's current repository. Purser is not the product being built; it is the orchestration framework used to plan, execute, and review the repo's actual work.
+You are setting up **purser** in the user's current repository. Purser is not the product being built; it is the Pi-native orchestration framework used to plan, execute, and review the repo's actual work.
 
 ## Goal
 
@@ -16,6 +16,7 @@ Make the current repository Purser-enabled using best practices for a local deve
 - Treat this repo as the product repo; **purser is just tooling**.
 - Use a **repo-local embedded Beads/Dolt database** only.
 - Do **not** configure Beads shared-server mode or external server mode.
+- Pi is the first-class host; any Codex usage must happen **through Pi**.
 - Prefer `uv`-based commands in configured gates when the repo uses Python tooling.
 - Do not guess the project's lint/type/test commands if they are discoverable from repo files.
 - If the repo already has relevant tooling/config, adapt to it instead of overwriting blindly.
@@ -26,9 +27,9 @@ Make the current repository Purser-enabled using best practices for a local deve
 1. `purser` is available to the user via `uv tool` or another explicit, documented mechanism.
 2. The current repo is initialized with local Beads (`bd init`, embedded mode only) unless it is already correctly initialized.
 3. The current repo has Purser config and prompt files.
-4. `.purser.toml` is customized for this repo's actual gates and preferred models.
+4. `.purser.toml` is customized for this repo's actual gates and any intentional model pinning.
 5. `AGENTS.md` is created or updated with a clearly labeled Purser section explaining Purser's role in the repo.
-6. Pi prompt templates are wired so Purser prompts are available as Pi slash commands without duplicating prompt files.
+6. Pi workflow prompts are wired so Purser prompts are available as Pi slash commands without duplicating prompt files.
 7. Local/runtime artifacts are ignored appropriately in `.gitignore`.
 8. `purser doctor` succeeds.
 9. Provide a short summary of what was changed and any follow-up the user should know.
@@ -42,7 +43,7 @@ Determine:
 - language / runtime
 - whether it uses Python, Node, Rust, Go, etc.
 - existing lint/type/test commands
-- whether `uv`, `ruff`, `pyright`, `pytest`, `pnpm`, `cargo`, etc. are already used
+- whether `uv`, `ruff`, `ty`, `pytest`, `pnpm`, `cargo`, etc. are already used
 - whether `.gitignore` already contains entries for local tooling
 
 Look at files such as:
@@ -89,106 +90,95 @@ purser init
 
 If config already exists, inspect before replacing anything. Prefer targeted edits over destructive rewrites.
 
+Expected scaffold includes:
+- `.purser.toml`
+- `.purser/prompts/roles/planner-role.md`
+- `.purser/prompts/roles/executor-role.md`
+- `.purser/prompts/roles/reviewer-role.md`
+- `.purser/prompts/workflows/purser-add-spec.md`
+- `.purser/prompts/workflows/purser-plan.md`
+- `.purser/prompts/workflows/purser-build.md`
+- `.purser/prompts/workflows/purser-build-all.md`
+- `.purser/README.md`
+- `specs/.gitkeep`
+- `.pi/settings.json`
+- `AGENTS.md`
+- `.gitignore`
+
 ### 5. Customize `.purser.toml`
 
 Set:
 - `[project]` name/language
 - `[gates]` based on the repo's real commands
-- `[roles.models]` to reasonable defaults or the user's requested models
-- `[roles].timeout_seconds` to a sane default like `240` or `600`
+- `roles.default_model` only if the repo wants a shared default model
+- `[roles.models]` only for real per-role overrides
+- `[roles].timeout_seconds` to a sane default like `600`
 - `[beads].auto_commit = "on"`
 
 Best-practice guidance:
-- For Python repos using `uv`, prefer:
+- For Python repos using strong `uv` + `ruff` + `ty` signals, prefer:
   - `uv run ruff check . && uv run ruff format --check .`
-  - `uv run pyright`
+  - `uv run ty check`
   - `uv run pytest -x --tb=short`
-- For Node repos, prefer the repo's actual package-manager scripts
-- For Rust repos, prefer `cargo fmt --check`, `cargo clippy`, `cargo test`
-- For Go repos, prefer `go test ./...` and the repo's real lint command
+- For weaker Python signals, adapt conservatively to the repo's actual commands.
+- For Node repos, prefer the repo's actual package-manager scripts.
+- For Rust repos, prefer `cargo fmt --check`, `cargo clippy`, `cargo test`.
+- For Go repos, prefer `go test ./...` and the repo's real lint command.
 
 Do not invent gates if the repo already defines them clearly.
+
+Model posture guidance:
+- Do **not** scaffold misleading working-looking defaults.
+- If nothing is pinned, let Purser fall back to Pi ambient/default model selection.
+- Examples of Pi-routed models the user might choose include `qwen3.5`, `gemma4`, `gpt-oss`, or `codex`.
 
 ### 6. Create or update `AGENTS.md`
 
 Create `AGENTS.md` if it does not exist, or append to it if it does.
 
-Add a clearly labeled section such as `## Purser workflow` that makes these points explicit:
+Ensure there is a clearly labeled section such as `## Purser workflow` that makes these points explicit:
 - Purser is a planning / execution / review framework used in this repo.
 - **Purser is not the repo's product or primary deliverable unless explicitly requested.**
 - The real goal is to advance the repo's actual work.
-- That work may include software development, bug fixing, documentation, research, data analysis, data discovery, or other scoped deliverables relevant to this repo.
 - Specs should describe the repo's real work, not Purser development work unless explicitly requested.
 - Use Purser as orchestration around the repo's work, not as the work itself.
 - Use repo-local embedded Beads storage only.
+- Planning requires director/human approval before bead generation.
 
-A good section to append is:
+Purser owns a delimited section using:
 
 ```md
-## Purser workflow
-
-This repository uses **Purser** as a planning / execution / review framework.
-
-Important:
-- **Purser is not the product or primary deliverable of this repository.**
-- The actual goal is to advance this repository's real work.
-- That work may include software development, bug fixing, documentation, research, data analysis, data discovery, or other scoped deliverables relevant to this repo.
-- Use Purser only as the orchestration layer for that work.
-
-When working in this repo:
-- Treat specs as descriptions of the repository's actual work, not Purser development work unless explicitly requested.
-- Use Purser to decompose specs into Beads, execute scoped work, run gates or other validation where applicable, and review outcomes.
-- Keep scope focused on the requested deliverable in this repository.
-- Respect this repo's actual conventions, workflows, validation methods, and success criteria.
-- Use repo-local embedded Beads storage only; do not use shared or server-backed Beads databases.
-
-Typical workflow:
-1. Write or refine a spec for the desired work in this repo.
-2. Have the director (human driver) review and approve the refined spec / planning approach.
-3. Only then use Purser to generate the bead graph and plan the work into atomic beads.
-4. Execute one bead at a time against this repo's actual artifacts (code, data, docs, analysis, etc.).
-5. Review for accuracy, atomicity, and elegance/fitness to the repo's goals.
-6. Record validation results for completed work.
+<!-- purser:agents begin -->
+<!-- purser:agents end -->
 ```
 
-### 7. Configure Pi prompt-template integration
+### 7. Configure Pi workflow prompt integration
 
-To make Purser prompts available as Pi slash commands without duplicating files, create a project-local Pi settings file that points at the canonical Purser prompt directory.
+Purser uses two prompt categories:
 
-Use Purser's canonical prompt directory:
+Runtime role prompts:
+- `.purser/prompts/roles/planner-role.md`
+- `.purser/prompts/roles/executor-role.md`
+- `.purser/prompts/roles/reviewer-role.md`
 
-```text
-.purser/prompts/
-```
+Operator workflow prompts:
+- `.purser/prompts/workflows/purser-add-spec.md`
+- `.purser/prompts/workflows/purser-plan.md`
+- `.purser/prompts/workflows/purser-build.md`
+- `.purser/prompts/workflows/purser-build-all.md`
 
-Create:
+To expose workflow prompts as Pi slash commands, ensure:
 
 ```text
 .pi/settings.json
 ```
 
-Set its contents to:
+contains:
 
 ```json
 {
-  "prompts": ["../.purser/prompts"]
+  "prompts": ["../.purser/prompts/workflows"]
 }
-```
-
-Ensure each prompt filename matches the desired Pi slash command name. For example:
-
-```text
-.purser/prompts/purser-planner-intake-spec.md
-.purser/prompts/purser-exec-build.md
-.purser/prompts/purser-exec-build-all.md
-```
-
-These become:
-
-```text
-/purser-planner-intake-spec
-/purser-exec-build
-/purser-exec-build-all
 ```
 
 After setup, tell the user to reload Pi with:
@@ -196,6 +186,12 @@ After setup, tell the user to reload Pi with:
 ```text
 /reload
 ```
+
+Expected slash commands include:
+- `/purser-add-spec`
+- `/purser-plan`
+- `/purser-build`
+- `/purser-build-all`
 
 Do not create duplicate copies under `.pi/prompts/` unless you intentionally want Pi-only overrides.
 
@@ -212,8 +208,6 @@ Add appropriate `.gitignore` entries if missing. Usually:
 VALIDATION.md
 ```
 
-Only add what makes sense for the repo and local workflow.
-
 ### 9. Verify health
 
 Run:
@@ -225,7 +219,9 @@ purser doctor
 Success means:
 - required binaries are found
 - config exists
-- prompts exist
+- runtime prompts exist
+- Pi workflow prompt integration is configured or at least surfaced clearly
+- model posture/fallback is reported honestly
 - Beads storage is local embedded mode
 
 ### 10. Report final status
@@ -233,7 +229,7 @@ Success means:
 Provide:
 - files created/edited
 - detected gate commands
-- configured models
+- configured models, if any
 - whether Beads was initialized or reused
 - result of `purser doctor`
 - any manual follow-up needed
@@ -244,10 +240,10 @@ Your setup is complete only if all of these are true:
 - `purser doctor` exits successfully
 - the repo uses local embedded Beads storage
 - `.purser.toml` reflects the repo's actual gates
-- prompt files exist
+- prompt files exist in the expected role/workflow layout
 - `AGENTS.md` contains a clear Purser section stating that Purser is framework/tooling rather than the repo's primary product
-- `.pi/settings.json` points Pi prompt templates at `.purser/prompts`
-- the user can access Purser prompt templates as Pi slash commands after `/reload`
+- `.pi/settings.json` points Pi workflow prompt discovery at `../.purser/prompts/workflows`
+- the user can access Purser workflow prompts as Pi slash commands after `/reload`
 - `.gitignore` protects local runtime files where appropriate
 - your final report is concise and explicit
 
@@ -261,6 +257,7 @@ Your setup is complete only if all of these are true:
   - types: `...`
   - tests: `...`
 - Configured models:
+  - default: `...` or `Pi ambient/default`
   - planner: `...`
   - executor: `...`
   - reviewer: `...`
@@ -276,7 +273,8 @@ If the user wants, you may also do a smoke test by:
 1. creating a tiny sample spec
 2. running `purser planner-intake-spec ...`
 3. having the director/human review the refined spec and planning approach
-4. running `purser planner-plan ...`
-5. optionally executing one safe sample bead
+4. running `purser approve-plan ...`
+5. running `purser planner-plan ...`
+6. optionally executing one safe sample bead
 
-Do not generate the bead graph before director/human review of the spec/planning approach. Do this only if the user asks for live validation after setup.
+Do not generate the bead graph before director/human review and explicit approval of the spec/planning approach. Do this only if the user asks for live validation after setup.

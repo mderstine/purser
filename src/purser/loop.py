@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import re
 
+from .artifacts import RunArtifacts
 from .beads import Bead, BeadsClient, BeadsError
 from .config import PurserConfig
 from .gates import GateFailure, GatesRunner
+from .outcomes import (
+    OutcomeProtocolError,
+    parse_executor_outcome,
+    parse_reviewer_outcome,
+)
 from .roles import PiRunner, RoleResult
 from .validation import (
     ValidationRecord,
@@ -20,21 +25,6 @@ class LoopRunResult:
     processed_beads: list[str]
 
 
-APPROVE_PATTERNS = [
-    re.compile(r"\bapprove\b", re.IGNORECASE),
-    re.compile(r"\bapproved\b", re.IGNORECASE),
-    re.compile(r"\bverdict\b.*\b(correct|pass|approved?)\b", re.IGNORECASE | re.DOTALL),
-    re.compile(r"\bcorrect, complete, and cohesive\b", re.IGNORECASE),
-]
-REJECT_PATTERNS = [
-    re.compile(r"\breject\b", re.IGNORECASE),
-    re.compile(r"\brejected\b", re.IGNORECASE),
-    re.compile(r"\brequested changes\b", re.IGNORECASE),
-    re.compile(r"\bnot correct\b", re.IGNORECASE),
-    re.compile(r"\bmissing\b", re.IGNORECASE),
-]
-
-
 class PurserLoop:
     def __init__(self, config: PurserConfig) -> None:
         self.config = config
@@ -42,6 +32,7 @@ class PurserLoop:
         self.beads = BeadsClient(self.root, auto_commit=config.beads.auto_commit)
         self.pi = PiRunner(self.root)
         self.gates = GatesRunner(self.root, config, beads=self.beads)
+        self.artifacts = RunArtifacts(self.root)
 
     def run_once(self, bead_id: str | None = None) -> str:
         bead = (
@@ -104,38 +95,135 @@ class PurserLoop:
             "If the bead/spec is too ambiguous to implement faithfully, do not guess; leave a concrete clarification note in Beads instead of fabricating details.\n"
             "Run the configured gates until all pass.\n"
             "When done, move the bead to in-review.\n"
-            "Do not close the bead."
+            "Do not close the bead.\n"
+            "At the end, include a fenced ```json structured outcome with these fields exactly: status, bead_id, files_touched, new_beads, ready_for_review, summary."
         )
         bead = self.beads.increment_attempts(bead.id)
         result = self.pi.run_role(
             role="executor",
-            model=self.config.roles.models.executor,
+            model=self.config.roles.resolved_model("executor"),
             prompt_path=prompt_path,
             message=message,
             timeout_seconds=self.config.roles.timeout_seconds,
         )
+        outcome = None
+        artifact_errors: list[str] = []
+        try:
+            outcome = parse_executor_outcome(result.final_text)
+        except OutcomeProtocolError as exc:
+            artifact_errors.append(
+                f"executor did not return a valid structured outcome payload: {exc}"
+            )
         updated = self.beads.show(bead.id)
+        if outcome is None:
+            self.artifacts.write_role_artifact(
+                kind="executor",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=None,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": updated.normalized_status,
+                },
+                errors=artifact_errors,
+            )
+            raise RuntimeError(artifact_errors[0])
+        if outcome.bead_id != bead.id:
+            message = (
+                f"executor structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
+            )
+            self.artifacts.write_role_artifact(
+                kind="executor",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": updated.normalized_status,
+                },
+                errors=[message],
+            )
+            raise RuntimeError(message)
+        if not outcome.ready_for_review:
+            message = (
+                f"executor structured outcome must set ready_for_review=true for bead {bead.id}"
+            )
+            self.artifacts.write_role_artifact(
+                kind="executor",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": updated.normalized_status,
+                },
+                errors=[message],
+            )
+            raise RuntimeError(message)
         if updated.normalized_status == "closed":
             self.beads.reopen(bead.id, reason="purser executor may not self-close")
-            raise BeadsError(f"Executor illegally closed bead {bead.id}")
+            latest = self.beads.show(bead.id)
+            message = f"Executor illegally closed bead {bead.id}"
+            self.artifacts.write_role_artifact(
+                kind="executor",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": latest.normalized_status,
+                },
+                errors=[message],
+            )
+            raise BeadsError(message)
         if updated.normalized_status not in {"in_review", "in_progress"}:
             self.beads.update_status(
                 bead.id, "in_review", notes="purser normalized executor completion"
             )
             updated = self.beads.show(bead.id)
+        gate_results = []
+        gate_failure = None
         try:
-            self.gates.run_all(bead.id)
+            gate_results = self.gates.run_all(bead.id)
         except GateFailure as error:
+            gate_failure = error.result
             self.beads.update_status(
                 bead.id, "open", notes=error.result.format_summary()
             )
+            latest = self.beads.show(bead.id)
+            self.artifacts.write_role_artifact(
+                kind="executor",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                gate_results=gate_results,
+                gate_failure=gate_failure,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": latest.normalized_status,
+                },
+                errors=[f"gate failed: {error.result.name}"],
+            )
             raise
+        final_bead = self.beads.show(bead.id)
         if updated.normalized_status != "in_review":
             self.beads.update_status(
                 bead.id,
                 "in_review",
                 notes="purser advanced bead to review after green gates",
             )
+            final_bead = self.beads.show(bead.id)
+        self.artifacts.write_role_artifact(
+            kind="executor",
+            bead_id=bead.id,
+            role_result=result,
+            structured_outcome=outcome,
+            gate_results=gate_results,
+            state={
+                "status_before": bead.normalized_status,
+                "status_after": final_bead.normalized_status,
+            },
+        )
         return result
 
     def _review(self, bead: Bead) -> RoleResult:
@@ -160,32 +248,146 @@ class PurserLoop:
             "If the work is correct, complete, and cohesive, you must actually close the bead in Beads during this run and summarize why.\n"
             "If not, you must actually reopen it or move it to open in Beads during this run with a concrete rejection note.\n"
             "A prose verdict without a real Beads state transition is a failure.\n"
-            "Do not edit source files."
+            "Do not edit source files.\n"
+            "At the end, include a fenced ```json structured outcome with these fields exactly: decision, bead_id, state_transition_performed, issues, summary."
         )
         result = self.pi.run_role(
             role="reviewer",
-            model=self.config.roles.models.reviewer,
+            model=self.config.roles.resolved_model("reviewer"),
             prompt_path=prompt_path,
             message=message,
             tools="read,bash,grep,find,ls",
             timeout_seconds=self.config.roles.timeout_seconds,
         )
+        outcome = None
+        artifact_errors: list[str] = []
+        try:
+            outcome = parse_reviewer_outcome(result.final_text)
+        except OutcomeProtocolError as exc:
+            artifact_errors.append(
+                f"reviewer did not return a valid structured outcome payload: {exc}"
+            )
+        current = self.beads.show(bead.id)
+        if outcome is None:
+            self.artifacts.write_role_artifact(
+                kind="reviewer",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=None,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": current.normalized_status,
+                },
+                errors=artifact_errors,
+            )
+            raise RuntimeError(artifact_errors[0])
+        if outcome.bead_id != bead.id:
+            message = (
+                f"reviewer structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
+            )
+            self.artifacts.write_role_artifact(
+                kind="reviewer",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": current.normalized_status,
+                },
+                errors=[message],
+            )
+            raise RuntimeError(message)
+        if not outcome.state_transition_performed:
+            message = (
+                f"reviewer structured outcome must set state_transition_performed=true for bead {bead.id}"
+            )
+            self.artifacts.write_role_artifact(
+                kind="reviewer",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": current.normalized_status,
+                },
+                errors=[message],
+            )
+            raise RuntimeError(message)
+        gate_results = []
+        gate_failure = None
         try:
             gate_results = self.gates.run_all(bead.id)
         except GateFailure as error:
+            gate_failure = error.result
             self.beads.update_status(
                 bead.id, "open", notes=error.result.format_summary()
             )
+            latest = self.beads.show(bead.id)
+            self.artifacts.write_role_artifact(
+                kind="reviewer",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                gate_results=gate_results,
+                gate_failure=gate_failure,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": latest.normalized_status,
+                },
+                errors=[f"gate failed: {error.result.name}"],
+            )
             return result
         current = self.beads.show(bead.id)
-        if current.normalized_status != "closed":
-            decision = self._review_decision(result.final_text)
-            summary = result.final_text or "Reviewer requested changes"
-            if decision == "approve":
-                current = self.beads.close(bead.id, reason="purser reviewer approved")
-            else:
-                self.beads.update_status(bead.id, "open", notes=summary)
-                return result
+        if outcome.decision == "approve":
+            if current.normalized_status != "closed":
+                message = (
+                    f"reviewer approved bead {bead.id} but did not actually close it in Beads"
+                )
+                self.artifacts.write_role_artifact(
+                    kind="reviewer",
+                    bead_id=bead.id,
+                    role_result=result,
+                    structured_outcome=outcome,
+                    gate_results=gate_results,
+                    state={
+                        "status_before": bead.normalized_status,
+                        "status_after": current.normalized_status,
+                    },
+                    errors=[message],
+                )
+                raise RuntimeError(message)
+        else:
+            if current.normalized_status == "closed":
+                message = (
+                    f"reviewer rejected bead {bead.id} but left it closed in Beads"
+                )
+                self.artifacts.write_role_artifact(
+                    kind="reviewer",
+                    bead_id=bead.id,
+                    role_result=result,
+                    structured_outcome=outcome,
+                    gate_results=gate_results,
+                    state={
+                        "status_before": bead.normalized_status,
+                        "status_after": current.normalized_status,
+                    },
+                    errors=[message],
+                )
+                raise RuntimeError(message)
+            self.beads.update_status(bead.id, "open", notes=outcome.summary)
+            latest = self.beads.show(bead.id)
+            self.artifacts.write_role_artifact(
+                kind="reviewer",
+                bead_id=bead.id,
+                role_result=result,
+                structured_outcome=outcome,
+                gate_results=gate_results,
+                state={
+                    "status_before": bead.normalized_status,
+                    "status_after": latest.normalized_status,
+                },
+            )
+            return result
         record = ValidationRecord(
             bead_id=current.id,
             title=current.title,
@@ -197,14 +399,16 @@ class PurserLoop:
             commits=[],
         )
         append_validation_log(self.config.validation_log_path, record)
+        self.artifacts.write_role_artifact(
+            kind="reviewer",
+            bead_id=bead.id,
+            role_result=result,
+            structured_outcome=outcome,
+            gate_results=gate_results,
+            state={
+                "status_before": bead.normalized_status,
+                "status_after": current.normalized_status,
+            },
+            extra={"validation_log_path": str(self.config.validation_log_path)},
+        )
         return result
-
-    @staticmethod
-    def _review_decision(text: str) -> str:
-        for pattern in REJECT_PATTERNS:
-            if pattern.search(text):
-                return "reject"
-        for pattern in APPROVE_PATTERNS:
-            if pattern.search(text):
-                return "approve"
-        return "reject"

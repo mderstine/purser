@@ -44,9 +44,9 @@ class LoopConfig:
 
 @dataclass(slots=True)
 class RolesModelsConfig:
-    planner: str = "anthropic/claude-opus-4-7"
-    executor: str = "groq/llama-3.3-70b"
-    reviewer: str = "anthropic/claude-opus-4-7"
+    planner: str | None = None
+    executor: str | None = None
+    reviewer: str | None = None
 
 
 @dataclass(slots=True)
@@ -55,7 +55,16 @@ class RolesConfig:
     executor_prompt: str | None = None
     reviewer_prompt: str | None = None
     timeout_seconds: int = 600
+    default_model: str | None = None
     models: RolesModelsConfig = field(default_factory=RolesModelsConfig)
+
+    def resolved_model(self, role: str) -> str | None:
+        role_value = getattr(self.models, role)
+        if role_value:
+            return role_value
+        if self.default_model:
+            return self.default_model
+        return None
 
 
 @dataclass(slots=True)
@@ -146,10 +155,11 @@ def load_config(
             executor_prompt=roles.get("executor_prompt"),
             reviewer_prompt=roles.get("reviewer_prompt"),
             timeout_seconds=int(roles.get("timeout_seconds", 600)),
+            default_model=roles.get("default_model"),
             models=RolesModelsConfig(
-                planner=roles_models.get("planner", "anthropic/claude-opus-4-7"),
-                executor=roles_models.get("executor", "groq/llama-3.3-70b"),
-                reviewer=roles_models.get("reviewer", "anthropic/claude-opus-4-7"),
+                planner=roles_models.get("planner"),
+                executor=roles_models.get("executor"),
+                reviewer=roles_models.get("reviewer"),
             ),
         ),
         completion=CompletionConfig(

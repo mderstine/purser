@@ -1,11 +1,45 @@
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+
 from purser.beads import Bead, normalize_status
 from purser.config import PurserConfig
 from purser.gates import GateFailure, GateResult
 from purser.loop import PurserLoop
 from purser.roles import RoleResult
+
+
+def executor_payload(bead_id: str) -> str:
+    return (
+        "Executor summary.\n\n"
+        "```json\n"
+        "{\n"
+        '  "status": "completed",\n'
+        f'  "bead_id": "{bead_id}",\n'
+        '  "files_touched": [],\n'
+        '  "new_beads": [],\n'
+        '  "ready_for_review": true,\n'
+        '  "summary": "executor done"\n'
+        "}\n"
+        "```\n"
+    )
+
+
+def reviewer_payload(bead_id: str, *, decision: str, summary: str) -> str:
+    issues = "[]" if decision == "approve" else '["changes requested"]'
+    return (
+        "Reviewer summary.\n\n"
+        "```json\n"
+        "{\n"
+        f'  "decision": "{decision}",\n'
+        f'  "bead_id": "{bead_id}",\n'
+        '  "state_transition_performed": true,\n'
+        f'  "issues": {issues},\n'
+        f'  "summary": "{summary}"\n'
+        "}\n"
+        "```\n"
+    )
 
 
 class ScenarioBeads:
@@ -75,14 +109,22 @@ class ScenarioPi:
         self.calls.append(role)
         if role == "executor":
             self.beads.bead.status = "in_review"
-            text = "Executor completed bead"
+            text = executor_payload(self.beads.bead.id)
         else:
             if self.reviewer_closes:
                 self.beads.close(self.beads.bead.id, reason="review passed")
-                text = "Reviewer validated and closed bead"
+                text = reviewer_payload(
+                    self.beads.bead.id,
+                    decision="approve",
+                    summary="Reviewer validated and closed bead",
+                )
             else:
-                self.beads.bead.status = "in_review"
-                text = "Reviewer requested changes"
+                self.beads.bead.status = "open"
+                text = reviewer_payload(
+                    self.beads.bead.id,
+                    decision="reject",
+                    summary="Reviewer requested changes",
+                )
         return RoleResult(
             role=role,
             model=kwargs["model"],
@@ -216,36 +258,35 @@ def test_review_gate_failure_reopens_bead_without_validation_log(
     assert pi.calls == ["reviewer"]
 
 
-class ApprovingScenarioPi(ScenarioPi):
-    def run_role(self, **kwargs):
-        role = kwargs["role"]
-        self.calls.append(role)
-        return RoleResult(
-            role=role,
-            model=kwargs["model"],
-            prompt_path=kwargs["prompt_path"],
-            command=[],
-            exit_code=0,
-            transcript=[{"type": "message_end"}],
-            final_text="Verdict: correct, complete, and cohesive. Approve.",
-            stderr="",
-            stdout='{"type":"message_end"}\n',
-        )
-
-
-def test_review_can_programmatically_close_from_approval_text(tmp_path: Path) -> None:
+def test_review_raises_if_reviewer_payload_is_missing(tmp_path: Path) -> None:
     bead = Bead(
         id="bd-5",
-        title="Approve by text",
+        title="Missing payload",
         status="in_review",
         raw={"metadata": {"purser_executor_attempts": 1}},
     )
     loop, beads, _, gates = _configure_loop(tmp_path, bead, reviewer_closes=False)
-    cast(Any, loop).pi = ApprovingScenarioPi(beads, reviewer_closes=False)
 
-    processed = loop.run_once("bd-5")
+    class ProseOnlyReviewer(ScenarioPi):
+        def run_role(self, **kwargs):
+            role = kwargs["role"]
+            self.calls.append(role)
+            return RoleResult(
+                role=role,
+                model=kwargs["model"],
+                prompt_path=kwargs["prompt_path"],
+                command=[],
+                exit_code=0,
+                transcript=[{"type": "message_end"}],
+                final_text="Verdict: correct, complete, and cohesive. Approve.",
+                stderr="",
+                stdout='{"type":"message_end"}\n',
+            )
 
-    assert processed == "bd-5"
-    assert beads.bead.normalized_status == "closed"
-    assert gates.calls == 1
-    assert (tmp_path / "VALIDATION.md").exists()
+    cast(Any, loop).pi = ProseOnlyReviewer(beads, reviewer_closes=False)
+
+    with pytest.raises(RuntimeError) as exc:
+        loop.run_once("bd-5")
+
+    assert "structured outcome payload" in str(exc.value)
+    assert gates.calls == 0

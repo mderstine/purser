@@ -7,6 +7,8 @@ import re
 import shutil
 import subprocess
 
+from .config import PurserConfig
+
 
 @dataclass(slots=True)
 class BinaryStatus:
@@ -136,7 +138,8 @@ def format_beads_context_status(context: BeadsContext) -> str:
     )
 
 
-def prompt_health(root: Path, config) -> list[str]:
+def prompt_health(root: Path, config: PurserConfig) -> list[str]:
+    del root
     messages: list[str] = []
     for role in ["planner", "executor", "reviewer"]:
         path = config.prompt_path(role)
@@ -146,4 +149,84 @@ def prompt_health(root: Path, config) -> list[str]:
             messages.append(f"{role}_prompt: missing file {path}")
         else:
             messages.append(f"{role}_prompt: ok ({path})")
+    return messages
+
+
+def pi_prompt_integration_health(root: Path) -> str:
+    settings_path = root / ".pi/settings.json"
+    expected = "../.purser/prompts/workflows"
+    if not settings_path.exists():
+        return (
+            "pi_prompts: warning "
+            f"(missing {settings_path}; run `purser init` or add {expected} to prompts)"
+        )
+    try:
+        raw = json.loads(settings_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return f"pi_prompts: warning (invalid JSON in {settings_path}: {exc})"
+    prompts = raw.get("prompts")
+    if not isinstance(prompts, list):
+        return (
+            "pi_prompts: warning "
+            f"({settings_path} does not define a prompts list; add {expected})"
+        )
+    if expected not in prompts:
+        return (
+            "pi_prompts: warning "
+            f"({settings_path} is missing {expected} in prompts)"
+        )
+    return f"pi_prompts: ok ({settings_path} includes {expected})"
+
+
+def prompt_layout_health(root: Path, config: PurserConfig) -> list[str]:
+    messages: list[str] = []
+    expected_roles_dir = root / ".purser/prompts/roles"
+    expected_workflows_dir = root / ".purser/prompts/workflows"
+    if expected_workflows_dir.exists():
+        messages.append(f"workflow_prompts: ok ({expected_workflows_dir})")
+    else:
+        messages.append(
+            f"workflow_prompts: warning (missing {expected_workflows_dir}; run `purser init` to scaffold Pi-discoverable workflows)"
+        )
+    for role in ["planner", "executor", "reviewer"]:
+        path = config.prompt_path(role)
+        if path is None:
+            continue
+        if path.parent == expected_roles_dir:
+            messages.append(f"{role}_prompt_layout: ok ({path})")
+        else:
+            messages.append(
+                f"{role}_prompt_layout: warning ({path} is outside {expected_roles_dir}; expected repo-local role prompts there)"
+            )
+    return messages
+
+
+def model_health(config: PurserConfig) -> list[str]:
+    messages: list[str] = []
+    configured: list[str] = []
+    default_model = config.roles.default_model
+    if default_model is not None:
+        if str(default_model).strip():
+            configured.append(f"default={str(default_model).strip()}")
+        else:
+            messages.append(
+                "models: warning (roles.default_model is blank; remove it to use Pi ambient/default model selection)"
+            )
+    for role in ["planner", "executor", "reviewer"]:
+        value = getattr(config.roles.models, role)
+        if value is None:
+            continue
+        if str(value).strip():
+            configured.append(f"{role}={str(value).strip()}")
+        else:
+            messages.append(
+                f"models: warning (roles.models.{role} is blank; remove it or set a real model string)"
+            )
+    if configured:
+        messages.insert(0, f"models: ok ({', '.join(configured)})")
+    else:
+        messages.insert(
+            0,
+            "models: ok (no repo-pinned models; Purser will use Pi ambient/default model selection)",
+        )
     return messages

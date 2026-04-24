@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -7,6 +8,23 @@ from purser.beads import Bead
 from purser.config import PurserConfig
 from purser.planner import PlannerService
 from purser.roles import RoleResult
+
+
+def planner_payload(created_beads: list[str], summary: str = "planner output") -> str:
+    deps = "[]"
+    beads = ", ".join(f'\"{bead}\"' for bead in created_beads)
+    return (
+        f"Summary: {summary}\n\n"
+        "```json\n"
+        "{\n"
+        '  "status": "planned",\n'
+        f'  "created_beads": [{beads}],\n'
+        f'  "dependencies": {deps},\n'
+        '  "needs_human_input": false,\n'
+        f'  "summary": "{summary}"\n'
+        "}\n"
+        "```\n"
+    )
 
 
 class FakePi:
@@ -103,16 +121,40 @@ def test_plan_spec_requires_existing_spec(tmp_path: Path) -> None:
         service.plan_spec(Path("missing.md"))
 
 
-def test_plan_spec_message_includes_human_approval_when_enabled(tmp_path: Path) -> None:
-    service, fake_pi = make_service(tmp_path, human_approve_plan=True)
+def test_plan_spec_requires_explicit_approval_when_enabled(tmp_path: Path) -> None:
+    service, _ = make_service(tmp_path, human_approve_plan=True)
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
     cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(spec))]])
 
+    with pytest.raises(RuntimeError) as exc:
+        service.plan_spec(spec)
+
+    assert "planning approval is required before bead generation" in str(exc.value)
+    assert "approve-plan" in str(exc.value)
+
+
+def test_plan_spec_message_includes_human_approval_when_enabled_after_approval(
+    tmp_path: Path,
+) -> None:
+    service, fake_pi = make_service(tmp_path, human_approve_plan=True, final_text=planner_payload(["bd-1"]))
+    spec = tmp_path / "spec.md"
+    spec.write_text("original", encoding="utf-8")
+    cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(spec))]])
+    service.approve_plan(spec)
+
     service.plan_spec(spec)
 
+    artifact_files = sorted((tmp_path / ".purser" / "runs").glob("*.json"))
+    assert artifact_files
+    artifact = json.loads(artifact_files[-1].read_text(encoding="utf-8"))
+    assert artifact["kind"] == "planner"
+    assert artifact["spec_path"] == str(spec)
+    assert artifact["structured_outcome"]["created_beads"] == ["bd-1"]
+    assert artifact["extra"]["created_bead_ids"] == ["bd-1"]
+
     assert (
-        "Human approval is required before implementation"
+        "Director (human driver) review/approval is required before generating the bead graph"
         in fake_pi.calls[0]["message"]
     )
     assert "must actually create the beads" in fake_pi.calls[0]["message"]
@@ -124,7 +166,7 @@ def test_plan_spec_message_includes_human_approval_when_enabled(tmp_path: Path) 
 def test_plan_spec_message_includes_autonomous_note_when_disabled(
     tmp_path: Path,
 ) -> None:
-    service, fake_pi = make_service(tmp_path, human_approve_plan=False)
+    service, fake_pi = make_service(tmp_path, human_approve_plan=False, final_text=planner_payload(["bd-1"]))
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
     cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(spec))]])
@@ -138,7 +180,7 @@ def test_plan_spec_message_includes_autonomous_note_when_disabled(
 
 
 def test_plan_spec_raises_if_no_beads_created(tmp_path: Path) -> None:
-    service, _ = make_service(tmp_path, final_text="Only prose, no mutations")
+    service, _ = make_service(tmp_path, human_approve_plan=False, final_text=planner_payload([], summary="Only prose, no mutations"))
     cast(Any, service).beads = FakeBeads([[], []])
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
@@ -148,6 +190,38 @@ def test_plan_spec_raises_if_no_beads_created(tmp_path: Path) -> None:
 
     assert "did not create any beads" in str(exc.value)
     assert "Only prose, no mutations" in str(exc.value)
+
+
+def test_plan_spec_raises_if_planner_payload_is_missing_or_invalid(tmp_path: Path) -> None:
+    service, _ = make_service(tmp_path, human_approve_plan=False, final_text="Only prose")
+    cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(tmp_path / "spec.md"))]])
+    spec = tmp_path / "spec.md"
+    spec.write_text("original", encoding="utf-8")
+
+    with pytest.raises(RuntimeError) as exc:
+        service.plan_spec(spec)
+
+    assert "structured outcome payload" in str(exc.value)
+    artifact_files = sorted((tmp_path / ".purser" / "runs").glob("*.json"))
+    assert artifact_files
+    artifact = json.loads(artifact_files[-1].read_text(encoding="utf-8"))
+    assert artifact["kind"] == "planner"
+    assert artifact["structured_outcome"] is None
+    assert artifact["errors"]
+
+
+def test_plan_spec_raises_if_structured_payload_disagrees_with_created_beads(
+    tmp_path: Path,
+) -> None:
+    service, _ = make_service(tmp_path, human_approve_plan=False, final_text=planner_payload(["bd-999"]))
+    spec = tmp_path / "spec.md"
+    spec.write_text("original", encoding="utf-8")
+    cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(spec))]])
+
+    with pytest.raises(RuntimeError) as exc:
+        service.plan_spec(spec)
+
+    assert "did not match actual created beads" in str(exc.value)
 
 
 def test_planner_prompt_file_must_exist(tmp_path: Path) -> None:

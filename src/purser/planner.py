@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .approvals import approve_spec, is_spec_approved
+from .artifacts import RunArtifacts
 from .beads import BeadsClient
 from .config import PurserConfig
+from .outcomes import OutcomeProtocolError, PlannerOutcome, parse_planner_outcome
 from .roles import PiRunner, RoleResult
 
 
@@ -21,6 +24,12 @@ class PlannerService:
         self.config = config
         self.pi = PiRunner(config.root)
         self.beads = BeadsClient(config.root, auto_commit=config.beads.auto_commit)
+        self.artifacts = RunArtifacts(config.root)
+
+    def approve_plan(self, spec_path: Path) -> Path:
+        spec_abs = self._resolve_spec_path(spec_path)
+        approval = approve_spec(self.config.root, spec_abs)
+        return approval.approval_path
 
     def intake_spec(
         self, spec_path: Path, synthesize: bool = False, output_path: Path | None = None
@@ -29,7 +38,7 @@ class PlannerService:
         spec_abs = self._resolve_spec_path(spec_path)
         result = self.pi.run_role(
             role="planner",
-            model=self.config.roles.models.planner,
+            model=self.config.roles.resolved_model("planner"),
             prompt_path=prompt_path,
             message=self._intake_message(spec_abs, synthesize=synthesize),
             timeout_seconds=self.config.roles.timeout_seconds,
@@ -51,10 +60,11 @@ class PlannerService:
     def plan_spec(self, spec_path: Path) -> RoleResult:
         prompt_path = self._planner_prompt_path()
         spec_abs = self._resolve_spec_path(spec_path)
+        self._ensure_plan_approved(spec_abs)
         before_ids = {bead.id for bead in self.beads.list_all()}
         result = self.pi.run_role(
             role="planner",
-            model=self.config.roles.models.planner,
+            model=self.config.roles.resolved_model("planner"),
             prompt_path=prompt_path,
             message=self._plan_message(spec_abs),
             tools="read,bash,grep,find,ls",
@@ -63,6 +73,28 @@ class PlannerService:
         after_beads = self.beads.list_all()
         after_ids = {bead.id for bead in after_beads}
         created_ids = sorted(after_ids - before_ids)
+        outcome = None
+        artifact_errors: list[str] = []
+        try:
+            outcome = parse_planner_outcome(result.final_text)
+        except OutcomeProtocolError as exc:
+            artifact_errors.append(
+                f"planner did not return a valid structured outcome payload: {exc}"
+            )
+        self.artifacts.write_role_artifact(
+            kind="planner",
+            spec_path=spec_abs,
+            role_result=result,
+            structured_outcome=outcome,
+            errors=artifact_errors,
+            extra={
+                "created_bead_ids": created_ids,
+                "before_bead_ids": sorted(before_ids),
+                "after_bead_ids": sorted(after_ids),
+            },
+        )
+        if artifact_errors:
+            raise RuntimeError(artifact_errors[0])
         if not created_ids:
             summary = result.final_text.strip()
             raise RuntimeError(
@@ -70,6 +102,7 @@ class PlannerService:
                 "planning must mutate the local Beads database via bd create/bd dep. "
                 f"Planner summary: {summary}"
             )
+        self._validate_planner_outcome(outcome, created_ids)
         created_beads = [bead for bead in after_beads if bead.id in created_ids]
         missing_spec = [
             bead.id
@@ -96,6 +129,31 @@ class PlannerService:
                 + "; ".join(problems)
             )
         return result
+
+    def _ensure_plan_approved(self, spec_abs: Path) -> None:
+        if not self.config.loop.human_approve_plan:
+            return
+        if is_spec_approved(self.config.root, spec_abs):
+            return
+        raise RuntimeError(
+            "planning approval is required before bead generation; "
+            f"run `purser approve-plan {spec_abs}` and then retry"
+        )
+
+    def _validate_planner_outcome(
+        self, outcome: PlannerOutcome, created_ids: list[str]
+    ) -> None:
+        created_set = set(created_ids)
+        outcome_set = set(outcome.created_beads)
+        if outcome.status != "planned":
+            raise RuntimeError(
+                f"planner structured outcome must use status=planned; got {outcome.status!r}"
+            )
+        if outcome_set != created_set:
+            raise RuntimeError(
+                "planner structured outcome did not match actual created beads; "
+                f"outcome={sorted(outcome_set)}, actual={sorted(created_set)}"
+            )
 
     def _planner_prompt_path(self) -> Path:
         prompt_path = self.config.prompt_path("planner")
@@ -144,6 +202,8 @@ class PlannerService:
             "Use discovered-from dependencies when scope spillover appears.\n"
             "Do not execute source-code work. Only plan and create/update beads.\n"
             "Do not stop at prose. A textual plan without Beads mutations is a failure.\n"
+            "At the end, include a fenced ```json structured outcome with these fields exactly: status, created_beads, dependencies, needs_human_input, summary.\n"
+            "Use created_beads for the bead IDs you actually created in this run, dependencies as two-item lists [blocker, blocked], needs_human_input as a boolean, and summary as a concise human-readable recap.\n"
             f"{approval_line}"
             "At the end, provide a concise summary of the created bead graph, key sequencing choices, and any ambiguities that still need human input."
         )

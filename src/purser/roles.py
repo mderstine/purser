@@ -116,7 +116,7 @@ class PiRunner:
         self,
         *,
         role: str,
-        model: str,
+        model: str | None,
         prompt_path: Path,
         message: str,
         tools: str | None = None,
@@ -125,8 +125,6 @@ class PiRunner:
     ) -> RoleResult:
         command = [
             "pi",
-            "--model",
-            model,
             "--mode",
             "json",
             "--print",
@@ -134,6 +132,8 @@ class PiRunner:
             "--append-system-prompt",
             str(prompt_path),
         ]
+        if model:
+            command[1:1] = ["--model", model]
         if tools:
             command += ["--tools", tools]
         if extra_args:
@@ -158,7 +158,7 @@ class PiRunner:
         )
         result = RoleResult(
             role=role,
-            model=model,
+            model=model or "<pi-default>",
             prompt_path=prompt_path,
             command=command,
             exit_code=completed.returncode,
