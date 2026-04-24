@@ -9,7 +9,7 @@ from purser.outcomes import (
 
 
 def test_parse_planner_outcome_from_fenced_json() -> None:
-    text = '''Planner summary.
+    text = """Planner summary.
 
 ```json
 {
@@ -20,7 +20,7 @@ def test_parse_planner_outcome_from_fenced_json() -> None:
   "summary": "created two beads"
 }
 ```
-'''
+"""
 
     outcome = parse_planner_outcome(text)
 
@@ -32,7 +32,7 @@ def test_parse_planner_outcome_from_fenced_json() -> None:
 
 
 def test_parse_executor_outcome_from_fenced_json() -> None:
-    text = '''Done.
+    text = """Done.
 
 ```json
 {
@@ -44,7 +44,7 @@ def test_parse_executor_outcome_from_fenced_json() -> None:
   "summary": "implemented bead"
 }
 ```
-'''
+"""
 
     outcome = parse_executor_outcome(text)
 
@@ -56,7 +56,7 @@ def test_parse_executor_outcome_from_fenced_json() -> None:
 
 
 def test_parse_reviewer_outcome_from_fenced_json() -> None:
-    text = '''Review complete.
+    text = """Review complete.
 
 ```json
 {
@@ -67,7 +67,7 @@ def test_parse_reviewer_outcome_from_fenced_json() -> None:
   "summary": "looks good"
 }
 ```
-'''
+"""
 
     outcome = parse_reviewer_outcome(text)
 
@@ -93,7 +93,7 @@ def test_parse_outcome_requires_valid_json() -> None:
 
 
 def test_parse_outcome_requires_expected_field_types() -> None:
-    bad = '''```json
+    bad = """```json
 {
   "decision": "approve",
   "bead_id": "bd-1",
@@ -101,7 +101,7 @@ def test_parse_outcome_requires_expected_field_types() -> None:
   "issues": [],
   "summary": "ok"
 }
-```'''
+```"""
 
     with pytest.raises(OutcomeProtocolError) as exc:
         parse_reviewer_outcome(bad)

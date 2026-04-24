@@ -95,7 +95,9 @@ def _parse_json_payload(text: str) -> dict:
     try:
         raw = json.loads(payload)
     except json.JSONDecodeError as exc:
-        raise OutcomeProtocolError("structured outcome payload is not valid JSON") from exc
+        raise OutcomeProtocolError(
+            "structured outcome payload is not valid JSON"
+        ) from exc
     if not isinstance(raw, dict):
         raise OutcomeProtocolError("structured outcome payload must be a JSON object")
     return raw
@@ -111,14 +113,18 @@ def _extract_fenced_json(text: str) -> str:
 def _require_str(raw: dict, key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str) or not value.strip():
-        raise OutcomeProtocolError(f"structured outcome field '{key}' must be a non-empty string")
+        raise OutcomeProtocolError(
+            f"structured outcome field '{key}' must be a non-empty string"
+        )
     return value.strip()
 
 
 def _require_bool(raw: dict, key: str) -> bool:
     value = raw.get(key)
     if not isinstance(value, bool):
-        raise OutcomeProtocolError(f"structured outcome field '{key}' must be a boolean")
+        raise OutcomeProtocolError(
+            f"structured outcome field '{key}' must be a boolean"
+        )
     return value
 
 

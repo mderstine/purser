@@ -28,7 +28,9 @@ def approve_spec(root: Path, spec_path: Path) -> PlanApproval:
         "spec_path": str(spec_path.resolve()),
         "approved_at": datetime.now(timezone.utc).isoformat(),
     }
-    approval_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    approval_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return PlanApproval(spec_path=spec_path.resolve(), approval_path=approval_path)
 
 

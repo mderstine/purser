@@ -171,10 +171,7 @@ def pi_prompt_integration_health(root: Path) -> str:
             f"({settings_path} does not define a prompts list; add {expected})"
         )
     if expected not in prompts:
-        return (
-            "pi_prompts: warning "
-            f"({settings_path} is missing {expected} in prompts)"
-        )
+        return f"pi_prompts: warning ({settings_path} is missing {expected} in prompts)"
     return f"pi_prompts: ok ({settings_path} includes {expected})"
 
 

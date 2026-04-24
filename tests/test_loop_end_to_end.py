@@ -3,7 +3,12 @@ from typing import Any, cast
 
 import pytest
 
-from purser.beads import Bead, normalize_status
+from purser.beads import (
+    REVIEW_READY_METADATA_KEY,
+    Bead,
+    is_review_ready,
+    normalize_status,
+)
 from purser.config import PurserConfig
 from purser.gates import GateFailure, GateResult
 from purser.loop import PurserLoop
@@ -61,6 +66,9 @@ class ScenarioBeads:
         wanted = {normalize_status(status) for status in statuses}
         return [self.bead] if self.bead.normalized_status in wanted else []
 
+    def list_review_ready(self) -> list[Bead]:
+        return [self.bead] if is_review_ready(self.bead) else []
+
     def claim(self, bead_id: str) -> Bead:
         assert bead_id == self.bead.id
         self.claimed = True
@@ -94,6 +102,13 @@ class ScenarioBeads:
         self.bead.status = "closed"
         return self.bead
 
+    def mark_review_ready(self, bead_id: str, ready: bool = True) -> Bead:
+        assert bead_id == self.bead.id
+        self.bead.raw.setdefault("metadata", {})[REVIEW_READY_METADATA_KEY] = (
+            "true" if ready else "false"
+        )
+        return self.bead
+
     def comment(self, bead_id: str, text: str) -> None:
         self.comments.append((bead_id, text))
 
@@ -108,7 +123,6 @@ class ScenarioPi:
         role = kwargs["role"]
         self.calls.append(role)
         if role == "executor":
-            self.beads.bead.status = "in_review"
             text = executor_payload(self.beads.bead.id)
         else:
             if self.reviewer_closes:
@@ -201,6 +215,31 @@ def test_run_once_end_to_end_closes_and_logs_validation(tmp_path: Path) -> None:
     assert "**Executor attempts:** 1" in validation
 
 
+def test_run_once_reviews_metadata_ready_bead_without_custom_status(
+    tmp_path: Path,
+) -> None:
+    bead = Bead(
+        id="bd-meta",
+        title="Metadata ready",
+        status="in_progress",
+        raw={
+            "metadata": {
+                "purser_executor_attempts": 1,
+                REVIEW_READY_METADATA_KEY: "true",
+            }
+        },
+    )
+    loop, beads, pi, gates = _configure_loop(tmp_path, bead)
+
+    processed = loop.run_once()
+
+    assert processed == "bd-meta"
+    assert beads.claimed is False
+    assert beads.closed is True
+    assert pi.calls == ["reviewer"]
+    assert gates.calls == 1
+
+
 def test_run_once_review_rejection_reopens_bead(tmp_path: Path) -> None:
     bead = Bead(id="bd-2", title="Need changes", status="open", raw={"metadata": {}})
     loop, beads, pi, gates = _configure_loop(tmp_path, bead, reviewer_closes=False)
@@ -209,6 +248,7 @@ def test_run_once_review_rejection_reopens_bead(tmp_path: Path) -> None:
 
     assert processed == "bd-2"
     assert beads.bead.normalized_status == "open"
+    assert beads.bead.metadata[REVIEW_READY_METADATA_KEY] == "false"
     assert any(
         status == "open" and notes == "Reviewer requested changes"
         for _, status, notes in beads.notes
@@ -254,6 +294,7 @@ def test_review_gate_failure_reopens_bead_without_validation_log(
 
     assert processed == "bd-4"
     assert beads.bead.normalized_status == "open"
+    assert beads.bead.metadata[REVIEW_READY_METADATA_KEY] == "false"
     assert not (tmp_path / "VALIDATION.md").exists()
     assert pi.calls == ["reviewer"]
 

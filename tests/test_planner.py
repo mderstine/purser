@@ -12,7 +12,7 @@ from purser.roles import RoleResult
 
 def planner_payload(created_beads: list[str], summary: str = "planner output") -> str:
     deps = "[]"
-    beads = ", ".join(f'\"{bead}\"' for bead in created_beads)
+    beads = ", ".join(f'"{bead}"' for bead in created_beads)
     return (
         f"Summary: {summary}\n\n"
         "```json\n"
@@ -137,7 +137,9 @@ def test_plan_spec_requires_explicit_approval_when_enabled(tmp_path: Path) -> No
 def test_plan_spec_message_includes_human_approval_when_enabled_after_approval(
     tmp_path: Path,
 ) -> None:
-    service, fake_pi = make_service(tmp_path, human_approve_plan=True, final_text=planner_payload(["bd-1"]))
+    service, fake_pi = make_service(
+        tmp_path, human_approve_plan=True, final_text=planner_payload(["bd-1"])
+    )
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
     cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(spec))]])
@@ -166,7 +168,9 @@ def test_plan_spec_message_includes_human_approval_when_enabled_after_approval(
 def test_plan_spec_message_includes_autonomous_note_when_disabled(
     tmp_path: Path,
 ) -> None:
-    service, fake_pi = make_service(tmp_path, human_approve_plan=False, final_text=planner_payload(["bd-1"]))
+    service, fake_pi = make_service(
+        tmp_path, human_approve_plan=False, final_text=planner_payload(["bd-1"])
+    )
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
     cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(spec))]])
@@ -180,7 +184,11 @@ def test_plan_spec_message_includes_autonomous_note_when_disabled(
 
 
 def test_plan_spec_raises_if_no_beads_created(tmp_path: Path) -> None:
-    service, _ = make_service(tmp_path, human_approve_plan=False, final_text=planner_payload([], summary="Only prose, no mutations"))
+    service, _ = make_service(
+        tmp_path,
+        human_approve_plan=False,
+        final_text=planner_payload([], summary="Only prose, no mutations"),
+    )
     cast(Any, service).beads = FakeBeads([[], []])
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
@@ -192,9 +200,15 @@ def test_plan_spec_raises_if_no_beads_created(tmp_path: Path) -> None:
     assert "Only prose, no mutations" in str(exc.value)
 
 
-def test_plan_spec_raises_if_planner_payload_is_missing_or_invalid(tmp_path: Path) -> None:
-    service, _ = make_service(tmp_path, human_approve_plan=False, final_text="Only prose")
-    cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(tmp_path / "spec.md"))]])
+def test_plan_spec_raises_if_planner_payload_is_missing_or_invalid(
+    tmp_path: Path,
+) -> None:
+    service, _ = make_service(
+        tmp_path, human_approve_plan=False, final_text="Only prose"
+    )
+    cast(Any, service).beads = FakeBeads(
+        [[], [make_bead("bd-1", spec_id=str(tmp_path / "spec.md"))]]
+    )
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
 
@@ -213,7 +227,9 @@ def test_plan_spec_raises_if_planner_payload_is_missing_or_invalid(tmp_path: Pat
 def test_plan_spec_raises_if_structured_payload_disagrees_with_created_beads(
     tmp_path: Path,
 ) -> None:
-    service, _ = make_service(tmp_path, human_approve_plan=False, final_text=planner_payload(["bd-999"]))
+    service, _ = make_service(
+        tmp_path, human_approve_plan=False, final_text=planner_payload(["bd-999"])
+    )
     spec = tmp_path / "spec.md"
     spec.write_text("original", encoding="utf-8")
     cast(Any, service).beads = FakeBeads([[], [make_bead("bd-1", spec_id=str(spec))]])

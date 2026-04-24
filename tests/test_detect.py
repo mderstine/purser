@@ -20,7 +20,9 @@ def test_detect_init_profile_prefers_uv_python_with_ty_when_signals_are_strong(
     assert profile.tests == "uv run pytest -x --tb=short"
 
 
-def test_detect_init_profile_uses_pyright_for_uv_python_without_ty(tmp_path: Path) -> None:
+def test_detect_init_profile_uses_pyright_for_uv_python_without_ty(
+    tmp_path: Path,
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname='demo'\n\n[dependency-groups]\ndev=['ruff']\n",
         encoding="utf-8",
@@ -36,7 +38,9 @@ def test_detect_init_profile_uses_pyright_for_uv_python_without_ty(tmp_path: Pat
 def test_detect_init_profile_falls_back_conservatively_for_python_without_strong_uv_signals(
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
 
     profile = detect_init_profile(tmp_path)
 
@@ -46,7 +50,9 @@ def test_detect_init_profile_falls_back_conservatively_for_python_without_strong
     assert profile.tests == "python3 -m pytest -x --tb=short"
 
 
-def test_detect_init_profile_uses_package_json_scripts_when_present(tmp_path: Path) -> None:
+def test_detect_init_profile_uses_package_json_scripts_when_present(
+    tmp_path: Path,
+) -> None:
     (tmp_path / "package.json").write_text(
         '{"scripts":{"lint":"eslint .","typecheck":"tsc --noEmit","test":"vitest"}}',
         encoding="utf-8",

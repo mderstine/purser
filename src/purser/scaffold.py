@@ -69,7 +69,9 @@ def merge_pi_settings_prompts(path: Path, prompt_dir: str) -> bool:
 def append_gitignore_entries(path: Path, entries: list[str]) -> bool:
     original = path.read_text(encoding="utf-8") if path.exists() else ""
     existing = {line.strip() for line in original.splitlines() if line.strip()}
-    missing = [entry for entry in entries if entry.strip() and entry.strip() not in existing]
+    missing = [
+        entry for entry in entries if entry.strip() and entry.strip() not in existing
+    ]
     if not missing:
         return False
     stripped = original.rstrip("\n")

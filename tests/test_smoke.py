@@ -3,7 +3,12 @@ from pathlib import Path
 from typing import Any, cast
 
 from purser import cli
-from purser.beads import Bead, normalize_status
+from purser.beads import (
+    REVIEW_READY_METADATA_KEY,
+    Bead,
+    is_review_ready,
+    normalize_status,
+)
 from purser.config import PurserConfig
 from purser.gates import GateResult
 from purser.loop import PurserLoop
@@ -26,6 +31,9 @@ class SmokeBeads:
     def list_by_statuses(self, statuses: list[str]) -> list[Bead]:
         wanted = {normalize_status(status) for status in statuses}
         return [self.bead] if self.bead.normalized_status in wanted else []
+
+    def list_review_ready(self) -> list[Bead]:
+        return [self.bead] if is_review_ready(self.bead) else []
 
     def claim(self, bead_id: str) -> Bead:
         assert bead_id == self.bead.id
@@ -57,6 +65,13 @@ class SmokeBeads:
         self.bead.status = "closed"
         return self.bead
 
+    def mark_review_ready(self, bead_id: str, ready: bool = True) -> Bead:
+        assert bead_id == self.bead.id
+        self.bead.raw.setdefault("metadata", {})[REVIEW_READY_METADATA_KEY] = (
+            "true" if ready else "false"
+        )
+        return self.bead
+
     def comment(self, bead_id: str, text: str) -> None:
         self.comments.append((bead_id, text))
 
@@ -68,7 +83,6 @@ class SmokePi:
     def run_role(self, **kwargs):
         role = kwargs["role"]
         if role == "executor":
-            self.beads.bead.status = "in_review"
             final_text = (
                 "Executor summary.\n\n"
                 "```json\n"
@@ -167,11 +181,16 @@ def test_smoke_portable_setup_from_nested_dir_then_doctor(
     assert f"config: ok ({repo_root / '.purser.toml'})" in out
     assert "pi_prompts: ok" in out
     assert "workflow_prompts: ok" in out
-    assert "models: ok (no repo-pinned models; Purser will use Pi ambient/default model selection)" in out
+    assert (
+        "models: ok (no repo-pinned models; Purser will use Pi ambient/default model selection)"
+        in out
+    )
     assert "beads_storage: ok" in out
 
 
-def test_smoke_hardened_runtime_persists_artifacts_and_validation(tmp_path: Path) -> None:
+def test_smoke_hardened_runtime_persists_artifacts_and_validation(
+    tmp_path: Path,
+) -> None:
     config = PurserConfig(root=tmp_path)
     prompts_dir = tmp_path / ".purser/prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
@@ -202,7 +221,9 @@ def test_smoke_hardened_runtime_persists_artifacts_and_validation(tmp_path: Path
 
     artifact_files = sorted((tmp_path / ".purser/runs").glob("*.json"))
     assert len(artifact_files) == 2
-    artifacts = [json.loads(path.read_text(encoding="utf-8")) for path in artifact_files]
+    artifacts = [
+        json.loads(path.read_text(encoding="utf-8")) for path in artifact_files
+    ]
     kinds = {artifact["kind"] for artifact in artifacts}
     assert kinds == {"executor", "reviewer"}
     executor_artifact = next(item for item in artifacts if item["kind"] == "executor")

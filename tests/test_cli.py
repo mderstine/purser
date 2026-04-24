@@ -38,7 +38,7 @@ def test_cmd_init_writes_config_and_prompts(
     config_text = (tmp_path / ".purser.toml").read_text(encoding="utf-8")
     assert '\ndefault_model = "qwen3.5"' not in config_text
     assert '# default_model = "qwen3.5"' in config_text
-    assert '# [roles.models]' in config_text
+    assert "# [roles.models]" in config_text
     agents = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "## Purser workflow" in agents
     assert "Purser is not the product or primary deliverable" in agents
@@ -165,9 +165,15 @@ def test_cmd_init_migrates_legacy_prompt_layout_and_pi_settings(
     code = cli.dispatch(["init"])
 
     assert code == 0
-    assert (tmp_path / ".purser/prompts/roles/planner-role.md").read_text(encoding="utf-8") == "legacy planner\n"
-    assert (tmp_path / ".purser/prompts/roles/executor-role.md").read_text(encoding="utf-8") == "legacy executor\n"
-    assert (tmp_path / ".purser/prompts/roles/reviewer-role.md").read_text(encoding="utf-8") == "legacy reviewer\n"
+    assert (tmp_path / ".purser/prompts/roles/planner-role.md").read_text(
+        encoding="utf-8"
+    ) == "legacy planner\n"
+    assert (tmp_path / ".purser/prompts/roles/executor-role.md").read_text(
+        encoding="utf-8"
+    ) == "legacy executor\n"
+    assert (tmp_path / ".purser/prompts/roles/reviewer-role.md").read_text(
+        encoding="utf-8"
+    ) == "legacy reviewer\n"
     config_text = (tmp_path / ".purser.toml").read_text(encoding="utf-8")
     assert ".purser/prompts/planner.md" not in config_text
     assert ".purser/prompts/roles/planner-role.md" in config_text
@@ -188,9 +194,13 @@ def test_cmd_init_fails_clearly_when_legacy_and_canonical_prompts_conflict(
     canonical_prompts.mkdir(parents=True)
     legacy_prompts.mkdir(parents=True, exist_ok=True)
     (legacy_prompts / "planner.md").write_text("legacy planner\n", encoding="utf-8")
-    (canonical_prompts / "planner-role.md").write_text("new planner\n", encoding="utf-8")
+    (canonical_prompts / "planner-role.md").write_text(
+        "new planner\n", encoding="utf-8"
+    )
 
-    with pytest.raises(RuntimeError, match="legacy prompt migration is unsafe for planner"):
+    with pytest.raises(
+        RuntimeError, match="legacy prompt migration is unsafe for planner"
+    ):
         cli.dispatch(["init"])
 
 
@@ -227,7 +237,14 @@ def test_cmd_init_appends_gitignore_entries_without_overwriting_existing_content
 
     assert code == 0
     lines = gitignore_path.read_text(encoding="utf-8").splitlines()
-    assert lines == [".venv/", ".purser/", "", ".beads/", ".purser.toml", "VALIDATION.md"]
+    assert lines == [
+        ".venv/",
+        ".purser/",
+        "",
+        ".beads/",
+        ".purser.toml",
+        "VALIDATION.md",
+    ]
 
 
 def test_cmd_approve_plan_writes_repo_local_approval_state(
@@ -317,7 +334,9 @@ def test_cmd_doctor_warns_when_legacy_prompt_layout_is_detected(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".purser/prompts").mkdir(parents=True)
-    (tmp_path / ".purser/prompts/planner.md").write_text("legacy planner", encoding="utf-8")
+    (tmp_path / ".purser/prompts/planner.md").write_text(
+        "legacy planner", encoding="utf-8"
+    )
     (tmp_path / ".purser.toml").write_text(
         "[project]\nname='demo'\n\n[roles]\n"
         "planner_prompt='.purser/prompts/planner.md'\n"
@@ -326,8 +345,12 @@ def test_cmd_doctor_warns_when_legacy_prompt_layout_is_detected(
         encoding="utf-8",
     )
     (tmp_path / ".purser/prompts/roles").mkdir(parents=True)
-    (tmp_path / ".purser/prompts/roles/executor-role.md").write_text("executor", encoding="utf-8")
-    (tmp_path / ".purser/prompts/roles/reviewer-role.md").write_text("reviewer", encoding="utf-8")
+    (tmp_path / ".purser/prompts/roles/executor-role.md").write_text(
+        "executor", encoding="utf-8"
+    )
+    (tmp_path / ".purser/prompts/roles/reviewer-role.md").write_text(
+        "reviewer", encoding="utf-8"
+    )
     (tmp_path / ".purser/prompts/workflows").mkdir(parents=True)
     monkeypatch.setattr(cli, "collect_binary_statuses", lambda: [])
     monkeypatch.setattr(
@@ -410,7 +433,10 @@ def test_cmd_doctor_reports_pi_default_model_fallback_when_unpinned(
 
     assert code == 1
     out = capsys.readouterr().out
-    assert "models: ok (no repo-pinned models; Purser will use Pi ambient/default model selection)" in out
+    assert (
+        "models: ok (no repo-pinned models; Purser will use Pi ambient/default model selection)"
+        in out
+    )
 
 
 def test_cmd_doctor_from_nested_directory_uses_repo_root(
@@ -420,7 +446,9 @@ def test_cmd_doctor_from_nested_directory_uses_repo_root(
     nested = repo_root / "a/b"
     nested.mkdir(parents=True)
     (repo_root / ".git").mkdir()
-    (repo_root / ".purser.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (repo_root / ".purser.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     monkeypatch.chdir(nested)
     monkeypatch.setattr(cli, "collect_binary_statuses", lambda: [])
     monkeypatch.setattr(cli, "prompt_health", lambda root, config: [])

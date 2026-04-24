@@ -77,7 +77,9 @@ def test_pi_runner_omits_model_flag_when_using_pi_default(
 
     class Completed:
         returncode = 0
-        stdout = '{"type":"message_end","message":{"role":"assistant","content":"ok"}}\n'
+        stdout = (
+            '{"type":"message_end","message":{"role":"assistant","content":"ok"}}\n'
+        )
         stderr = ""
 
     def fake_run(command, **kwargs):

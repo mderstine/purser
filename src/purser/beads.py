@@ -28,6 +28,10 @@ class BeadsError(RuntimeError):
     pass
 
 
+REVIEW_READY_METADATA_KEY = "purser_review_ready"
+_TRUE_METADATA_VALUES = {"1", "true", "yes", "review", "ready"}
+
+
 class BeadsClient:
     def __init__(self, root: Path, auto_commit: str = "on") -> None:
         self.root = root
@@ -63,6 +67,23 @@ class BeadsClient:
         normalized = sorted({normalize_status(status) for status in statuses})
         raw = self._run("list", "--status", ",".join(normalized))
         return [self._coerce_bead(item) for item in _items_from_json(raw)]
+
+    def list_review_ready(self) -> list[Bead]:
+        by_id: dict[str, Bead] = {}
+        try:
+            for bead in self.list_by_statuses(["in_review"]):
+                if bead.normalized_status != "closed":
+                    by_id[bead.id] = bead
+        except BeadsError:
+            # Some bd builds expose custom statuses in config but reject them in
+            # list/update status validation. Purser's portable review queue is
+            # therefore metadata-first and treats custom in_review as optional
+            # backwards compatibility only.
+            pass
+        for bead in self.list_all():
+            if is_review_ready(bead):
+                by_id[bead.id] = bead
+        return list(by_id.values())
 
     def show(self, bead_id: str) -> Bead:
         raw = self._run("show", bead_id)
@@ -135,6 +156,11 @@ class BeadsClient:
         self._run("update", bead_id, "--set-metadata", f"{key}={value}")
         return self.show(bead_id)
 
+    def mark_review_ready(self, bead_id: str, ready: bool = True) -> Bead:
+        return self.set_metadata(
+            bead_id, REVIEW_READY_METADATA_KEY, "true" if ready else "false"
+        )
+
     def increment_attempts(self, bead_id: str) -> Bead:
         bead = self.show(bead_id)
         current = int(bead.metadata.get("purser_executor_attempts", 0))
@@ -158,6 +184,15 @@ class BeadsClient:
         return Bead(
             id=bead_id_value, title=title, status=status, raw=cast(dict[str, Any], item)
         )
+
+
+def is_review_ready(bead: Bead) -> bool:
+    if bead.normalized_status == "closed":
+        return False
+    if bead.normalized_status == "in_review":
+        return True
+    value = str(bead.metadata.get(REVIEW_READY_METADATA_KEY, "")).strip().lower()
+    return value in _TRUE_METADATA_VALUES
 
 
 def normalize_status(status: str) -> str:

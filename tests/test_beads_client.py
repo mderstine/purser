@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from purser.beads import BeadsClient, BeadsError
+from purser.beads import REVIEW_READY_METADATA_KEY, BeadsClient, BeadsError
 
 
 class StubBeadsClient(BeadsClient):
@@ -43,3 +43,32 @@ def test_show_raises_on_unparseable_output() -> None:
 
     with pytest.raises(BeadsError):
         client.show("bd-404")
+
+
+def test_list_review_ready_falls_back_to_metadata_when_status_rejected() -> None:
+    class StatusRejectingClient(StubBeadsClient):
+        def _run(self, *args: str, check: bool = True):
+            if args[:2] == ("list", "--status"):
+                raise BeadsError("invalid status")
+            return super()._run(*args, check=check)
+
+    client = StatusRejectingClient(
+        [
+            [
+                {
+                    "id": "bd-ready",
+                    "title": "Ready",
+                    "status": "in_progress",
+                    "metadata": {REVIEW_READY_METADATA_KEY: "true"},
+                },
+                {
+                    "id": "bd-open",
+                    "title": "Open",
+                    "status": "open",
+                    "metadata": {},
+                },
+            ]
+        ]
+    )
+
+    assert [bead.id for bead in client.list_review_ready()] == ["bd-ready"]

@@ -42,7 +42,9 @@ class RunArtifacts:
             "spec_path": str(spec_path) if spec_path else None,
             "role_result": self._serialize_role_result(role_result),
             "structured_outcome": self._serialize(structured_outcome),
-            "gate_results": [self._serialize_gate_result(item) for item in (gate_results or [])],
+            "gate_results": [
+                self._serialize_gate_result(item) for item in (gate_results or [])
+            ],
             "gate_failure": self._serialize_gate_result(gate_failure)
             if gate_failure
             else None,
@@ -50,7 +52,9 @@ class RunArtifacts:
             "errors": errors or [],
             "extra": extra or {},
         }
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         return path
 
     def _filename(self, kind: str, subject: str) -> str:
@@ -92,6 +96,6 @@ class RunArtifacts:
     def _serialize(self, value: object) -> object:
         if value is None:
             return None
-        if is_dataclass(value):
+        if is_dataclass(value) and not isinstance(value, type):
             return asdict(value)
         return value

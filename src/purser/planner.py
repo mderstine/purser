@@ -95,6 +95,8 @@ class PlannerService:
         )
         if artifact_errors:
             raise RuntimeError(artifact_errors[0])
+        if outcome is None:
+            raise RuntimeError("planner structured outcome was not parsed")
         if not created_ids:
             summary = result.final_text.strip()
             raise RuntimeError(

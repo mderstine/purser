@@ -32,13 +32,13 @@ reviewer_prompt = ".purser/prompts/reviewer.md"
 
 def test_load_config_resolves_role_and_default_models(tmp_path: Path) -> None:
     (tmp_path / ".purser.toml").write_text(
-        '''
+        """
 [roles]
 default_model = "qwen3.5"
 
 [roles.models]
 executor = "codex"
-''',
+""",
         encoding="utf-8",
     )
 

@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import pytest
 
-from purser.beads import Bead
+from purser.beads import REVIEW_READY_METADATA_KEY, Bead
 from purser.config import PurserConfig
 from purser.gates import GateResult
 from purser.loop import PurserLoop
@@ -64,6 +64,13 @@ class FakeBeads:
         self._bead.status = "closed"
         return self._bead
 
+    def mark_review_ready(self, bead_id: str, ready: bool = True) -> Bead:
+        assert bead_id == self._bead.id
+        self._bead.raw.setdefault("metadata", {})[REVIEW_READY_METADATA_KEY] = (
+            "true" if ready else "false"
+        )
+        return self._bead
+
 
 class FakePi:
     def __init__(self) -> None:
@@ -101,7 +108,7 @@ class FakeGates:
         ]
 
 
-def test_execute_increments_attempts_and_moves_to_review(tmp_path: Path) -> None:
+def test_execute_increments_attempts_and_marks_review_ready(tmp_path: Path) -> None:
     bead = Bead(id="bd-1", title="Test", status="open", raw={"metadata": {}})
     loop = PurserLoop(PurserConfig(root=tmp_path))
     fake_beads = FakeBeads(bead)
@@ -121,7 +128,8 @@ def test_execute_increments_attempts_and_moves_to_review(tmp_path: Path) -> None
     loop._execute(bead)
 
     assert fake_beads.incremented is True
-    assert "in_review" in fake_beads.status_updates
+    assert "in_review" not in fake_beads.status_updates
+    assert bead.metadata[REVIEW_READY_METADATA_KEY] == "true"
     artifact_files = sorted((tmp_path / ".purser" / "runs").glob("*.json"))
     assert artifact_files
     artifact = json.loads(artifact_files[-1].read_text(encoding="utf-8"))
@@ -203,3 +211,4 @@ def test_execute_message_requires_exact_literals_and_no_guessing(
         in message
     )
     assert "do not guess" in message
+    assert "do not rely on custom review statuses" in message

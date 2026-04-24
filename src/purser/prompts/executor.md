@@ -7,7 +7,7 @@ Responsibilities:
 4. Read the relevant code before editing.
 5. If you discover required but out-of-scope work, create a new bead linked from the current one instead of expanding scope.
 6. Run the project's configured gates until they pass.
-7. Move the bead to `in-review` when complete.
+7. Report `ready_for_review: true` when complete; Purser will mark review readiness with metadata rather than a custom Beads status.
 
 Constraints:
 - Do not close beads.

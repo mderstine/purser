@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .artifacts import RunArtifacts
-from .beads import Bead, BeadsClient, BeadsError
+from .beads import Bead, BeadsClient, BeadsError, is_review_ready
 from .config import PurserConfig
 from .gates import GateFailure, GatesRunner
 from .outcomes import (
@@ -40,7 +40,7 @@ class PurserLoop:
         )
         if bead is None:
             return "done"
-        if bead.normalized_status == "in_review":
+        if is_review_ready(bead):
             self._review(bead)
             return bead.id
         claimed = (
@@ -68,9 +68,9 @@ class PurserLoop:
             processed.append(self.run_once(bead.id))
 
     def _next_review_or_ready_bead(self) -> Bead | None:
-        in_review = self.beads.list_by_statuses(["in_review"])
-        if in_review:
-            return in_review[0]
+        review_ready = self.beads.list_review_ready()
+        if review_ready:
+            return review_ready[0]
         ready = self.beads.ready(limit=1)
         return ready[0] if ready else None
 
@@ -94,8 +94,8 @@ class PurserLoop:
             "Treat exact file names, exact strings, exact paths, and exact commands as binding requirements, not loose intent.\n"
             "If the bead/spec is too ambiguous to implement faithfully, do not guess; leave a concrete clarification note in Beads instead of fabricating details.\n"
             "Run the configured gates until all pass.\n"
-            "When done, move the bead to in-review.\n"
-            "Do not close the bead.\n"
+            "When done, leave the bead in progress/open for Purser to mark review-ready.\n"
+            "Do not close the bead and do not rely on custom review statuses.\n"
             "At the end, include a fenced ```json structured outcome with these fields exactly: status, bead_id, files_touched, new_beads, ready_for_review, summary."
         )
         bead = self.beads.increment_attempts(bead.id)
@@ -129,9 +129,7 @@ class PurserLoop:
             )
             raise RuntimeError(artifact_errors[0])
         if outcome.bead_id != bead.id:
-            message = (
-                f"executor structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
-            )
+            message = f"executor structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
             self.artifacts.write_role_artifact(
                 kind="executor",
                 bead_id=bead.id,
@@ -145,9 +143,7 @@ class PurserLoop:
             )
             raise RuntimeError(message)
         if not outcome.ready_for_review:
-            message = (
-                f"executor structured outcome must set ready_for_review=true for bead {bead.id}"
-            )
+            message = f"executor structured outcome must set ready_for_review=true for bead {bead.id}"
             self.artifacts.write_role_artifact(
                 kind="executor",
                 bead_id=bead.id,
@@ -178,7 +174,7 @@ class PurserLoop:
             raise BeadsError(message)
         if updated.normalized_status not in {"in_review", "in_progress"}:
             self.beads.update_status(
-                bead.id, "in_review", notes="purser normalized executor completion"
+                bead.id, "in_progress", notes="purser normalized executor completion"
             )
             updated = self.beads.show(bead.id)
         gate_results = []
@@ -187,6 +183,7 @@ class PurserLoop:
             gate_results = self.gates.run_all(bead.id)
         except GateFailure as error:
             gate_failure = error.result
+            self.beads.mark_review_ready(bead.id, ready=False)
             self.beads.update_status(
                 bead.id, "open", notes=error.result.format_summary()
             )
@@ -206,13 +203,13 @@ class PurserLoop:
             )
             raise
         final_bead = self.beads.show(bead.id)
-        if updated.normalized_status != "in_review":
-            self.beads.update_status(
+        if final_bead.normalized_status not in {"in_review", "in_progress"}:
+            final_bead = self.beads.update_status(
                 bead.id,
-                "in_review",
-                notes="purser advanced bead to review after green gates",
+                "in_progress",
+                notes="purser kept bead active after green gates",
             )
-            final_bead = self.beads.show(bead.id)
+        final_bead = self.beads.mark_review_ready(bead.id, ready=True)
         self.artifacts.write_role_artifact(
             kind="executor",
             bead_id=bead.id,
@@ -282,9 +279,7 @@ class PurserLoop:
             )
             raise RuntimeError(artifact_errors[0])
         if outcome.bead_id != bead.id:
-            message = (
-                f"reviewer structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
-            )
+            message = f"reviewer structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
             self.artifacts.write_role_artifact(
                 kind="reviewer",
                 bead_id=bead.id,
@@ -298,9 +293,7 @@ class PurserLoop:
             )
             raise RuntimeError(message)
         if not outcome.state_transition_performed:
-            message = (
-                f"reviewer structured outcome must set state_transition_performed=true for bead {bead.id}"
-            )
+            message = f"reviewer structured outcome must set state_transition_performed=true for bead {bead.id}"
             self.artifacts.write_role_artifact(
                 kind="reviewer",
                 bead_id=bead.id,
@@ -319,6 +312,7 @@ class PurserLoop:
             gate_results = self.gates.run_all(bead.id)
         except GateFailure as error:
             gate_failure = error.result
+            self.beads.mark_review_ready(bead.id, ready=False)
             self.beads.update_status(
                 bead.id, "open", notes=error.result.format_summary()
             )
@@ -340,9 +334,7 @@ class PurserLoop:
         current = self.beads.show(bead.id)
         if outcome.decision == "approve":
             if current.normalized_status != "closed":
-                message = (
-                    f"reviewer approved bead {bead.id} but did not actually close it in Beads"
-                )
+                message = f"reviewer approved bead {bead.id} but did not actually close it in Beads"
                 self.artifacts.write_role_artifact(
                     kind="reviewer",
                     bead_id=bead.id,
@@ -374,6 +366,7 @@ class PurserLoop:
                     errors=[message],
                 )
                 raise RuntimeError(message)
+            self.beads.mark_review_ready(bead.id, ready=False)
             self.beads.update_status(bead.id, "open", notes=outcome.summary)
             latest = self.beads.show(bead.id)
             self.artifacts.write_role_artifact(

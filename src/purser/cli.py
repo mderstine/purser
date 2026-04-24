@@ -78,7 +78,7 @@ timeout_seconds = 600
 
 [completion]
 require_empty_ready = true
-forbid_open_statuses = [\"open\", \"in-review\"]
+forbid_open_statuses = [\"open\", \"in_progress\"]
 """
 
 PURSER_AGENTS_BODY = """## Purser workflow

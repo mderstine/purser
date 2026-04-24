@@ -71,7 +71,7 @@ class RolesConfig:
 class CompletionConfig:
     require_empty_ready: bool = True
     forbid_open_statuses: list[str] = field(
-        default_factory=lambda: ["open", "in-progress", "in_review", "in-review"]
+        default_factory=lambda: ["open", "in_progress"]
     )
 
 
@@ -165,7 +165,7 @@ def load_config(
         completion=CompletionConfig(
             require_empty_ready=bool(completion.get("require_empty_ready", True)),
             forbid_open_statuses=list(
-                completion.get("forbid_open_statuses", ["open", "in-review"])
+                completion.get("forbid_open_statuses", ["open", "in_progress"])
             ),
         ),
         planner=PlannerConfig(

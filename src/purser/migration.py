@@ -45,7 +45,9 @@ class LegacyLayoutState:
 def migrate_legacy_layout(root: Path) -> MigrationReport:
     report = MigrationReport()
     config_path = root / ".purser.toml"
-    config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else None
+    config_text = (
+        config_path.read_text(encoding="utf-8") if config_path.exists() else None
+    )
 
     for state in detect_legacy_layout(root, config_text=config_text):
         if not state.legacy_exists:
@@ -120,7 +122,9 @@ def detect_legacy_layout(
 ) -> list[LegacyLayoutState]:
     if config_text is None:
         config_path = root / ".purser.toml"
-        config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else None
+        config_text = (
+            config_path.read_text(encoding="utf-8") if config_path.exists() else None
+        )
     states: list[LegacyLayoutState] = []
     for role, (legacy_rel, canonical_rel) in LEGACY_ROLE_PROMPTS.items():
         legacy_path = root / legacy_rel
@@ -129,9 +133,9 @@ def detect_legacy_layout(
         canonical_exists = canonical_path.exists()
         conflicts = False
         if legacy_exists and canonical_exists:
-            conflicts = legacy_path.read_text(encoding="utf-8") != canonical_path.read_text(
+            conflicts = legacy_path.read_text(
                 encoding="utf-8"
-            )
+            ) != canonical_path.read_text(encoding="utf-8")
         states.append(
             LegacyLayoutState(
                 role=role,
@@ -149,7 +153,9 @@ def detect_legacy_layout(
 def migration_health(root: Path) -> list[str]:
     messages: list[str] = []
     config_path = root / ".purser.toml"
-    config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else None
+    config_text = (
+        config_path.read_text(encoding="utf-8") if config_path.exists() else None
+    )
     states = detect_legacy_layout(root, config_text=config_text)
     for state in states:
         if state.conflicts:
