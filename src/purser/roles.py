@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 import json
 import subprocess
 
@@ -83,9 +84,12 @@ def parse_json_mode_stdout(stdout: str) -> tuple[list[dict], str, str]:
 
 
 def _assistant_text_from_message(message: object) -> str:
-    if not isinstance(message, dict) or message.get("role") != "assistant":
+    if not isinstance(message, dict):
         return ""
-    content = message.get("content")
+    message_dict = cast(dict[str, Any], message)
+    if message_dict.get("role") != "assistant":
+        return ""
+    content = message_dict.get("content")
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
@@ -102,9 +106,12 @@ def _assistant_text_from_message(message: object) -> str:
 
 
 def _assistant_error_from_message(message: object) -> str:
-    if not isinstance(message, dict) or message.get("role") != "assistant":
+    if not isinstance(message, dict):
         return ""
-    error_message = message.get("errorMessage")
+    message_dict = cast(dict[str, Any], message)
+    if message_dict.get("role") != "assistant":
+        return ""
+    error_message = message_dict.get("errorMessage")
     return error_message.strip() if isinstance(error_message, str) else ""
 
 

@@ -155,7 +155,7 @@ def test_execute_raises_if_executor_payload_is_missing(tmp_path: Path) -> None:
     loop.config.roles.executor_prompt = ".purser/prompts/executor.md"
     loop.config.roles.reviewer_prompt = ".purser/prompts/reviewer.md"
 
-    fake_pi.run_role = lambda **kwargs: RoleResult(
+    cast(Any, fake_pi).run_role = lambda **kwargs: RoleResult(
         role=kwargs["role"],
         model=kwargs["model"],
         prompt_path=kwargs["prompt_path"],
@@ -225,7 +225,7 @@ def test_execute_repairs_missing_executor_outcome(tmp_path: Path) -> None:
             stdout="{}\n",
         )
 
-    fake_pi.run_role = run_role
+    cast(Any, fake_pi).run_role = run_role
 
     loop._execute(bead)
 
@@ -279,7 +279,7 @@ def test_reviewer_repairs_malformed_outcome(tmp_path: Path) -> None:
             stdout="{}\n",
         )
 
-    fake_pi.run_role = run_role
+    cast(Any, fake_pi).run_role = run_role
 
     loop._review(bead)
 
@@ -329,7 +329,7 @@ def test_reviewer_message_assigns_lifecycle_to_purser(tmp_path: Path) -> None:
             stdout="{}\n",
         )
 
-    fake_pi.run_role = run_role
+    cast(Any, fake_pi).run_role = run_role
 
     loop._review(bead)
 

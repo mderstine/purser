@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 
 class OutcomeProtocolError(RuntimeError):
@@ -340,12 +340,13 @@ def _require_gate_list(
             raise OutcomeProtocolError(
                 f"structured outcome field '{key}[{index}]' must be an object"
             )
+        item_dict = cast(dict[str, Any], item)
         result.append(
             GateOutcome(
-                command=_require_nested_str(item, key, index, "command"),
-                status=_require_nested_enum(item, key, index, "status", GATE_STATUSES),
-                exit_code=_require_nested_int(item, key, index, "exit_code"),
-                summary=_require_nested_str(item, key, index, "summary"),
+                command=_require_nested_str(item_dict, key, index, "command"),
+                status=_require_nested_enum(item_dict, key, index, "status", GATE_STATUSES),
+                exit_code=_require_nested_int(item_dict, key, index, "exit_code"),
+                summary=_require_nested_str(item_dict, key, index, "summary"),
             )
         )
     return result
@@ -361,13 +362,14 @@ def _require_review_issue_list(raw: dict[str, Any], key: str) -> list[ReviewIssu
             raise OutcomeProtocolError(
                 f"structured outcome field '{key}[{index}]' must be an object"
             )
+        item_dict = cast(dict[str, Any], item)
         result.append(
             ReviewIssue(
                 severity=_require_nested_enum(
-                    item, key, index, "severity", ISSUE_SEVERITIES
+                    item_dict, key, index, "severity", ISSUE_SEVERITIES
                 ),
-                summary=_require_nested_str(item, key, index, "summary"),
-                file=_require_nested_optional_str(item, key, index, "file"),
+                summary=_require_nested_str(item_dict, key, index, "summary"),
+                file=_require_nested_optional_str(item_dict, key, index, "file"),
             )
         )
     return result
