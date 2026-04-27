@@ -7,6 +7,7 @@ import json
 import re
 
 from .gates import GateResult
+from .outcomes import ReviewerOutcome
 from .roles import RoleResult
 
 _SAFE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -96,6 +97,12 @@ class RunArtifacts:
     def _serialize(self, value: object) -> object:
         if value is None:
             return None
+        if isinstance(value, ReviewerOutcome):
+            payload = asdict(value)
+            payload["decision"] = value.decision
+            payload["state_transition_performed"] = value.state_transition_performed
+            payload["issues"] = value.issues
+            return payload
         if is_dataclass(value) and not isinstance(value, type):
             return asdict(value)
         return value
