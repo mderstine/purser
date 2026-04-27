@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+import json
 
 from .artifacts import RunArtifacts
 from .beads import Bead, BeadsClient, BeadsError, is_review_ready
 from .config import PurserConfig
 from .gates import GateFailure, GatesRunner
 from .outcomes import (
+    EXECUTOR_OUTCOME_SCHEMA,
+    REVIEWER_OUTCOME_SCHEMA,
     OutcomeProtocolError,
     parse_executor_outcome,
     parse_reviewer_outcome,
 )
-from .roles import PiRunner, RoleResult
+from .roles import PiRunner, RoleExecutionError, RoleResult
 from .validation import (
     ValidationRecord,
     append_validation_log,
@@ -23,6 +29,9 @@ from .validation import (
 class LoopRunResult:
     status: str
     processed_beads: list[str]
+
+
+MAX_OUTCOME_REPAIR_ATTEMPTS = 1
 
 
 class PurserLoop:
@@ -106,14 +115,14 @@ class PurserLoop:
             message=message,
             timeout_seconds=self.config.roles.timeout_seconds,
         )
-        outcome = None
-        artifact_errors: list[str] = []
-        try:
-            outcome = parse_executor_outcome(result.final_text)
-        except OutcomeProtocolError as exc:
-            artifact_errors.append(
-                f"executor did not return a valid structured outcome payload: {exc}"
-            )
+        outcome, errors, repair_attempts = self._parse_outcome_with_repair(
+            kind="executor",
+            bead_id=bead.id,
+            role_result=result,
+            prompt_path=prompt_path,
+            parser=parse_executor_outcome,
+            schema=EXECUTOR_OUTCOME_SCHEMA,
+        )
         updated = self.beads.show(bead.id)
         if outcome is None:
             self.artifacts.write_role_artifact(
@@ -125,9 +134,10 @@ class PurserLoop:
                     "status_before": bead.normalized_status,
                     "status_after": updated.normalized_status,
                 },
-                errors=artifact_errors,
+                errors=errors,
+                extra={"repair_attempts": repair_attempts},
             )
-            raise RuntimeError(artifact_errors[0])
+            raise RuntimeError(errors[0])
         if outcome.bead_id != bead.id:
             message = f"executor structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
             self.artifacts.write_role_artifact(
@@ -140,6 +150,7 @@ class PurserLoop:
                     "status_after": updated.normalized_status,
                 },
                 errors=[message],
+                extra={"repair_attempts": repair_attempts},
             )
             raise RuntimeError(message)
         if not outcome.ready_for_review:
@@ -154,6 +165,7 @@ class PurserLoop:
                     "status_after": updated.normalized_status,
                 },
                 errors=[message],
+                extra={"repair_attempts": repair_attempts},
             )
             raise RuntimeError(message)
         if updated.normalized_status == "closed":
@@ -170,6 +182,7 @@ class PurserLoop:
                     "status_after": latest.normalized_status,
                 },
                 errors=[message],
+                extra={"repair_attempts": repair_attempts},
             )
             raise BeadsError(message)
         if updated.normalized_status not in {"in_review", "in_progress"}:
@@ -200,6 +213,7 @@ class PurserLoop:
                     "status_after": latest.normalized_status,
                 },
                 errors=[f"gate failed: {error.result.name}"],
+                extra={"repair_attempts": repair_attempts},
             )
             raise
         final_bead = self.beads.show(bead.id)
@@ -220,8 +234,100 @@ class PurserLoop:
                 "status_before": bead.normalized_status,
                 "status_after": final_bead.normalized_status,
             },
+            extra={"repair_attempts": repair_attempts},
         )
         return result
+
+    def _parse_outcome_with_repair(
+        self,
+        *,
+        kind: str,
+        bead_id: str,
+        role_result: RoleResult,
+        prompt_path: Path,
+        parser: Callable[[str], Any],
+        schema: dict[str, Any],
+    ) -> tuple[Any | None, list[str], list[dict[str, object]]]:
+        errors: list[str] = []
+        repair_attempts: list[dict[str, object]] = []
+        try:
+            return parser(role_result.final_text), errors, repair_attempts
+        except OutcomeProtocolError as exc:
+            first_error = f"{kind} did not return a valid structured outcome payload: {exc}"
+            errors.append(first_error)
+
+        for attempt in range(1, MAX_OUTCOME_REPAIR_ATTEMPTS + 1):
+            repair_record: dict[str, object] = {
+                "attempt": attempt,
+                "role": f"{kind}-outcome-repair",
+            }
+            try:
+                repair_result = self.pi.run_role(
+                    role=f"{kind}-outcome-repair",
+                    model=self.config.roles.resolved_model(kind),
+                    prompt_path=prompt_path,
+                    message=self._outcome_repair_message(
+                        kind=kind,
+                        bead_id=bead_id,
+                        schema=schema,
+                        error=errors[-1],
+                        role_result=role_result,
+                    ),
+                    timeout_seconds=self.config.roles.timeout_seconds,
+                )
+            except RoleExecutionError as exc:
+                repair_error = f"{kind} structured outcome repair attempt {attempt} failed to run: {exc}"
+                errors.append(repair_error)
+                repair_record["error"] = repair_error
+                repair_record["parsed"] = False
+                repair_attempts.append(repair_record)
+                continue
+            repair_record.update(
+                {
+                    "exit_code": repair_result.exit_code,
+                    "final_text": repair_result.final_text,
+                    "stderr": repair_result.stderr,
+                    "provider_error": repair_result.provider_error,
+                }
+            )
+            try:
+                outcome = parser(repair_result.final_text)
+            except OutcomeProtocolError as exc:
+                repair_error = f"{kind} structured outcome repair attempt {attempt} failed: {exc}"
+                errors.append(repair_error)
+                repair_record["error"] = repair_error
+                repair_record["parsed"] = False
+                repair_attempts.append(repair_record)
+                continue
+            repair_record["parsed"] = True
+            repair_attempts.append(repair_record)
+            return outcome, errors, repair_attempts
+        return None, errors, repair_attempts
+
+    def _outcome_repair_message(
+        self,
+        *,
+        kind: str,
+        bead_id: str,
+        schema: dict[str, Any],
+        error: str,
+        role_result: RoleResult,
+    ) -> str:
+        transcript = json.dumps(role_result.transcript, indent=2, sort_keys=True)
+        schema_text = json.dumps(schema, indent=2, sort_keys=True)
+        return (
+            f"Repair the structured outcome for {kind} bead {bead_id}.\n"
+            "The previous agent run completed, but Purser could not parse or validate its structured outcome.\n"
+            f"Validation error: {error}\n\n"
+            "Required JSON schema-like contract:\n"
+            f"{schema_text}\n\n"
+            "Original final assistant text:\n"
+            f"{role_result.final_text}\n\n"
+            "Original JSON-mode transcript:\n"
+            f"{transcript}\n\n"
+            "Return only one JSON object matching the required contract. Do not wrap it in Markdown. "
+            "Use only evidence from the transcript/final text. If the evidence is insufficient, return a failed outcome with a clear summary/blocking reason rather than fabricating success."
+        )
 
     def _review(self, bead: Bead) -> RoleResult:
         prompt_path = self.config.prompt_path("reviewer")
@@ -256,14 +362,14 @@ class PurserLoop:
             tools="read,bash,grep,find,ls",
             timeout_seconds=self.config.roles.timeout_seconds,
         )
-        outcome = None
-        artifact_errors: list[str] = []
-        try:
-            outcome = parse_reviewer_outcome(result.final_text)
-        except OutcomeProtocolError as exc:
-            artifact_errors.append(
-                f"reviewer did not return a valid structured outcome payload: {exc}"
-            )
+        outcome, errors, repair_attempts = self._parse_outcome_with_repair(
+            kind="reviewer",
+            bead_id=bead.id,
+            role_result=result,
+            prompt_path=prompt_path,
+            parser=parse_reviewer_outcome,
+            schema=REVIEWER_OUTCOME_SCHEMA,
+        )
         current = self.beads.show(bead.id)
         if outcome is None:
             self.artifacts.write_role_artifact(
@@ -275,9 +381,10 @@ class PurserLoop:
                     "status_before": bead.normalized_status,
                     "status_after": current.normalized_status,
                 },
-                errors=artifact_errors,
+                errors=errors,
+                extra={"repair_attempts": repair_attempts},
             )
-            raise RuntimeError(artifact_errors[0])
+            raise RuntimeError(errors[0])
         if outcome.bead_id != bead.id:
             message = f"reviewer structured outcome bead_id mismatch: expected {bead.id}, got {outcome.bead_id}"
             self.artifacts.write_role_artifact(
@@ -290,6 +397,7 @@ class PurserLoop:
                     "status_after": current.normalized_status,
                 },
                 errors=[message],
+                extra={"repair_attempts": repair_attempts},
             )
             raise RuntimeError(message)
         if not outcome.state_transition_performed:
@@ -304,6 +412,7 @@ class PurserLoop:
                     "status_after": current.normalized_status,
                 },
                 errors=[message],
+                extra={"repair_attempts": repair_attempts},
             )
             raise RuntimeError(message)
         gate_results = []
@@ -329,6 +438,7 @@ class PurserLoop:
                     "status_after": latest.normalized_status,
                 },
                 errors=[f"gate failed: {error.result.name}"],
+                extra={"repair_attempts": repair_attempts},
             )
             return result
         current = self.beads.show(bead.id)
@@ -346,6 +456,7 @@ class PurserLoop:
                         "status_after": current.normalized_status,
                     },
                     errors=[message],
+                    extra={"repair_attempts": repair_attempts},
                 )
                 raise RuntimeError(message)
         else:
@@ -364,6 +475,7 @@ class PurserLoop:
                         "status_after": current.normalized_status,
                     },
                     errors=[message],
+                    extra={"repair_attempts": repair_attempts},
                 )
                 raise RuntimeError(message)
             self.beads.mark_review_ready(bead.id, ready=False)
@@ -379,6 +491,7 @@ class PurserLoop:
                     "status_before": bead.normalized_status,
                     "status_after": latest.normalized_status,
                 },
+                extra={"repair_attempts": repair_attempts},
             )
             return result
         record = ValidationRecord(
@@ -402,6 +515,9 @@ class PurserLoop:
                 "status_before": bead.normalized_status,
                 "status_after": current.normalized_status,
             },
-            extra={"validation_log_path": str(self.config.validation_log_path)},
+            extra={
+                "validation_log_path": str(self.config.validation_log_path),
+                "repair_attempts": repair_attempts,
+            },
         )
         return result

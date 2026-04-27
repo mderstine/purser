@@ -177,6 +177,117 @@ def test_execute_raises_if_executor_payload_is_missing(tmp_path: Path) -> None:
     assert artifact["kind"] == "executor"
     assert artifact["errors"]
     assert artifact["structured_outcome"] is None
+    assert artifact["extra"]["repair_attempts"]
+    assert artifact["extra"]["repair_attempts"][0]["parsed"] is False
+
+
+def test_execute_repairs_missing_executor_outcome(tmp_path: Path) -> None:
+    bead = Bead(id="bd-4", title="Test", status="open", raw={"metadata": {}})
+    loop = PurserLoop(PurserConfig(root=tmp_path))
+    fake_beads = FakeBeads(bead)
+    fake_pi = FakePi()
+    cast(Any, loop).beads = fake_beads
+    cast(Any, loop).pi = fake_pi
+    cast(Any, loop).gates = FakeGates()
+    executor_prompt = tmp_path / ".purser/prompts/executor.md"
+    reviewer_prompt = tmp_path / ".purser/prompts/reviewer.md"
+    executor_prompt.parent.mkdir(parents=True, exist_ok=True)
+    executor_prompt.write_text("executor", encoding="utf-8")
+    reviewer_prompt.write_text("reviewer", encoding="utf-8")
+    loop.config.roles.executor_prompt = ".purser/prompts/executor.md"
+    loop.config.roles.reviewer_prompt = ".purser/prompts/reviewer.md"
+
+    def run_role(**kwargs):
+        role = kwargs["role"]
+        final_text = "implemented bd-4 successfully"
+        if role == "executor-outcome-repair":
+            final_text = json.dumps(
+                {
+                    "status": "completed",
+                    "bead_id": "bd-4",
+                    "files_touched": [],
+                    "new_beads": [],
+                    "gates_run": [],
+                    "ready_for_review": True,
+                    "summary": "executor done",
+                    "blocking_reason": None,
+                }
+            )
+        return RoleResult(
+            role=role,
+            model=kwargs["model"],
+            prompt_path=kwargs["prompt_path"],
+            command=[],
+            exit_code=0,
+            transcript=[{"type": "message_end"}],
+            final_text=final_text,
+            stderr="",
+            stdout="{}\n",
+        )
+
+    fake_pi.run_role = run_role
+
+    loop._execute(bead)
+
+    artifact_files = sorted((tmp_path / ".purser" / "runs").glob("*.json"))
+    artifact = json.loads(artifact_files[-1].read_text(encoding="utf-8"))
+    assert artifact["structured_outcome"]["bead_id"] == "bd-4"
+    assert artifact["extra"]["repair_attempts"][0]["parsed"] is True
+    assert artifact["extra"]["repair_attempts"][0]["role"] == "executor-outcome-repair"
+
+
+def test_reviewer_repairs_malformed_outcome(tmp_path: Path) -> None:
+    bead = Bead(id="bd-5", title="Test", status="in_progress", raw={"metadata": {}})
+    loop = PurserLoop(PurserConfig(root=tmp_path))
+    fake_beads = FakeBeads(bead)
+    fake_pi = FakePi()
+    cast(Any, loop).beads = fake_beads
+    cast(Any, loop).pi = fake_pi
+    cast(Any, loop).gates = FakeGates()
+    reviewer_prompt = tmp_path / ".purser/prompts/reviewer.md"
+    executor_prompt = tmp_path / ".purser/prompts/executor.md"
+    reviewer_prompt.parent.mkdir(parents=True, exist_ok=True)
+    reviewer_prompt.write_text("reviewer", encoding="utf-8")
+    executor_prompt.write_text("executor", encoding="utf-8")
+    loop.config.roles.reviewer_prompt = ".purser/prompts/reviewer.md"
+    loop.config.roles.executor_prompt = ".purser/prompts/executor.md"
+
+    def run_role(**kwargs):
+        role = kwargs["role"]
+        if role == "reviewer":
+            fake_beads.close("bd-5")
+            final_text = "```json\n{not valid}\n```"
+        else:
+            final_text = json.dumps(
+                {
+                    "decision": "approve",
+                    "bead_id": "bd-5",
+                    "state_transition_performed": True,
+                    "issues": [],
+                    "summary": "reviewer approved",
+                }
+            )
+        return RoleResult(
+            role=role,
+            model=kwargs["model"],
+            prompt_path=kwargs["prompt_path"],
+            command=[],
+            exit_code=0,
+            transcript=[{"type": "message_end"}],
+            final_text=final_text,
+            stderr="",
+            stdout="{}\n",
+        )
+
+    fake_pi.run_role = run_role
+
+    loop._review(bead)
+
+    artifact_files = sorted((tmp_path / ".purser" / "runs").glob("*.json"))
+    artifact = json.loads(artifact_files[-1].read_text(encoding="utf-8"))
+    assert artifact["kind"] == "reviewer"
+    assert artifact["structured_outcome"]["decision"] == "approve"
+    assert artifact["extra"]["repair_attempts"][0]["parsed"] is True
 
 
 def test_execute_message_requires_exact_literals_and_no_guessing(
