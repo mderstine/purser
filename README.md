@@ -196,7 +196,7 @@ Purser now expects structured role outcomes from planner, executor, and reviewer
 
 - `.purser/runs/`
 
-Artifacts include enough information to debug malformed role output, gate failures, and review/planning mismatches.
+Artifacts include enough information to debug malformed role output, gate failures, and review/planning mismatches. Planner runs also record a stable planner run ID, spec hash, created bead IDs, and planning state so retries after timeouts can detect and reuse partially created bead graphs instead of duplicating them.
 
 ### Lifecycle ownership
 

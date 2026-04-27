@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import hashlib
 
 from .approvals import approve_spec, is_spec_approved
 from .artifacts import RunArtifacts
-from .beads import BeadsClient
+from .beads import Bead, BeadsClient
 from .config import PurserConfig
 from .outcomes import OutcomeProtocolError, PlannerOutcome, parse_planner_outcome
-from .roles import PiRunner, RoleResult
+from .roles import PiRunner, RoleExecutionError, RoleResult
 
 
 @dataclass(slots=True)
@@ -17,6 +18,13 @@ class IntakeResult:
     synthesized: bool
     output_path: Path | None
     role_result: RoleResult
+
+
+@dataclass(frozen=True, slots=True)
+class PlannerRunIdentity:
+    spec_path: Path
+    spec_hash: str
+    run_id: str
 
 
 class PlannerService:
@@ -60,19 +68,78 @@ class PlannerService:
     def plan_spec(self, spec_path: Path) -> RoleResult:
         prompt_path = self._planner_prompt_path()
         spec_abs = self._resolve_spec_path(spec_path)
+        identity = self._planner_run_identity(spec_abs)
         self._ensure_plan_approved(spec_abs)
-        before_ids = {bead.id for bead in self.beads.list_all()}
-        result = self.pi.run_role(
-            role="planner",
-            model=self.config.roles.resolved_model("planner"),
-            prompt_path=prompt_path,
-            message=self._plan_message(spec_abs),
-            tools="read,bash,grep,find,ls",
-            timeout_seconds=self.config.roles.timeout_seconds,
-        )
+        before_beads = self.beads.list_all()
+        existing = self._filter_planned_beads(before_beads, identity)
+        if existing:
+            result = self._synthetic_planner_result(
+                prompt_path,
+                f"Planning already exists for {spec_abs}: {', '.join(bead.id for bead in existing)}",
+            )
+            self.artifacts.write_role_artifact(
+                kind="planner",
+                spec_path=spec_abs,
+                role_result=result,
+                structured_outcome=PlannerOutcome(
+                    status="planned",
+                    created_beads=[bead.id for bead in existing],
+                    dependencies=[],
+                    needs_human_input=False,
+                    summary="existing planner output reused; no duplicate beads created",
+                ),
+                extra={
+                    "planner_run_id": identity.run_id,
+                    "spec_hash": identity.spec_hash,
+                    "created_bead_ids": [bead.id for bead in existing],
+                    "planning_state": "complete_existing",
+                },
+            )
+            return result
+        before_ids = {bead.id for bead in before_beads}
+        try:
+            result = self.pi.run_role(
+                role="planner",
+                model=self.config.roles.resolved_model("planner"),
+                prompt_path=prompt_path,
+                message=self._plan_message(identity),
+                tools="read,bash,grep,find,ls",
+                timeout_seconds=self.config.roles.timeout_seconds,
+            )
+        except RoleExecutionError as exc:
+            after_beads = self.beads.list_all()
+            after_ids = {bead.id for bead in after_beads}
+            created_ids = sorted(after_ids - before_ids)
+            self._tag_planner_beads(after_beads, created_ids, identity)
+            result = self._synthetic_planner_result(
+                prompt_path,
+                f"planner failed or timed out after creating {len(created_ids)} bead(s): {exc}",
+            )
+            self.artifacts.write_role_artifact(
+                kind="planner",
+                spec_path=spec_abs,
+                role_result=result,
+                structured_outcome=None,
+                errors=[str(exc)],
+                extra={
+                    "planner_run_id": identity.run_id,
+                    "spec_hash": identity.spec_hash,
+                    "created_bead_ids": created_ids,
+                    "before_bead_ids": sorted(before_ids),
+                    "after_bead_ids": sorted(after_ids),
+                    "planning_state": "partial" if created_ids else "failed_unknown",
+                },
+            )
+            if created_ids:
+                raise RuntimeError(
+                    "planner failed or timed out after partial bead creation; "
+                    f"created beads for retry recovery: {', '.join(created_ids)}"
+                ) from exc
+            raise
         after_beads = self.beads.list_all()
         after_ids = {bead.id for bead in after_beads}
         created_ids = sorted(after_ids - before_ids)
+        self._tag_planner_beads(after_beads, created_ids, identity)
         outcome = None
         artifact_errors: list[str] = []
         try:
@@ -88,9 +155,12 @@ class PlannerService:
             structured_outcome=outcome,
             errors=artifact_errors,
             extra={
+                "planner_run_id": identity.run_id,
+                "spec_hash": identity.spec_hash,
                 "created_bead_ids": created_ids,
                 "before_bead_ids": sorted(before_ids),
                 "after_bead_ids": sorted(after_ids),
+                "planning_state": "complete" if not artifact_errors else "failed",
             },
         )
         if artifact_errors:
@@ -167,6 +237,58 @@ class PlannerService:
             raise FileNotFoundError(prompt_path)
         return prompt_path
 
+    def planned_beads_for_spec(self, spec_path: Path) -> list[Bead]:
+        spec_abs = self._resolve_spec_path(spec_path)
+        identity = self._planner_run_identity(spec_abs)
+        return self._filter_planned_beads(self.beads.list_all(), identity)
+
+    def _filter_planned_beads(
+        self, beads: list[Bead], identity: PlannerRunIdentity
+    ) -> list[Bead]:
+        planned = []
+        for bead in beads:
+            metadata = bead.metadata
+            if (
+                str(metadata.get("purser_planner_run_id") or "") == identity.run_id
+                and str(metadata.get("purser_spec_hash") or "") == identity.spec_hash
+            ):
+                planned.append(bead)
+        return sorted(planned, key=lambda bead: bead.id)
+
+    def _planner_run_identity(self, spec_abs: Path) -> PlannerRunIdentity:
+        content = spec_abs.read_bytes()
+        spec_hash = hashlib.sha256(content).hexdigest()
+        run_seed = f"{spec_abs}\0{spec_hash}".encode("utf-8")
+        run_id = "plan-" + hashlib.sha256(run_seed).hexdigest()[:16]
+        return PlannerRunIdentity(spec_path=spec_abs, spec_hash=spec_hash, run_id=run_id)
+
+    def _tag_planner_beads(
+        self, beads: list[Bead], bead_ids: list[str], identity: PlannerRunIdentity
+    ) -> None:
+        selected = [bead for bead in beads if bead.id in set(bead_ids)]
+        for bead in selected:
+            bead.raw.setdefault("metadata", {})["purser_planner_run_id"] = identity.run_id
+            bead.raw.setdefault("metadata", {})["purser_spec_hash"] = identity.spec_hash
+            bead.raw.setdefault("metadata", {})["purser_spec_path"] = str(identity.spec_path)
+            set_metadata = getattr(self.beads, "set_metadata", None)
+            if callable(set_metadata):
+                set_metadata(bead.id, "purser_planner_run_id", identity.run_id)
+                set_metadata(bead.id, "purser_spec_hash", identity.spec_hash)
+                set_metadata(bead.id, "purser_spec_path", str(identity.spec_path))
+
+    def _synthetic_planner_result(self, prompt_path: Path, final_text: str) -> RoleResult:
+        return RoleResult(
+            role="planner",
+            model=self.config.roles.resolved_model("planner") or "<pi-default>",
+            prompt_path=prompt_path,
+            command=[],
+            exit_code=0,
+            transcript=[],
+            final_text=final_text,
+            stderr="",
+            stdout="",
+        )
+
     def _resolve_spec_path(self, spec_path: Path) -> Path:
         resolved = (
             (self.config.root / spec_path).resolve()
@@ -188,7 +310,8 @@ class PlannerService:
             "4. Do not create beads yet."
         )
 
-    def _plan_message(self, spec_abs: Path) -> str:
+    def _plan_message(self, identity: PlannerRunIdentity) -> str:
+        spec_abs = identity.spec_path
         approval_line = (
             "Director (human driver) review/approval is required before generating the bead graph; treat this command as being run only after that approval. If approval has not actually happened, stop and ask for it instead of creating beads.\n"
             if self.config.loop.human_approve_plan
@@ -199,6 +322,7 @@ class PlannerService:
             "Read the full spec and decompose it into atomic beads in Beads only after director approval of the refined spec/plan.\n"
             "You must actually create the beads in the local Beads database during this run using bd create and bd dep.\n"
             f"Every created bead must include --spec-id {spec_abs}.\n"
+            f"This stable Purser planner run ID is {identity.run_id}; include it in notes if you need to discuss recovery.\n"
             "Create open beads with clear titles, descriptions, acceptance criteria, and dependency edges.\n"
             "Preserve exact literals from the spec in acceptance criteria when they matter (file names, exact output strings, exact commands, exact paths).\n"
             "Use discovered-from dependencies when scope spillover appears.\n"
