@@ -198,6 +198,15 @@ Purser now expects structured role outcomes from planner, executor, and reviewer
 
 Artifacts include enough information to debug malformed role output, gate failures, and review/planning mismatches.
 
+### Lifecycle ownership
+
+Purser orchestration owns normal Beads lifecycle transitions:
+
+- executor agents perform scoped work and emit structured outcomes; they do not close/reopen beads or set custom review statuses
+- Purser validates executor outcomes, runs gates, and marks review readiness with `purser_review_ready` metadata
+- reviewer agents inspect work and emit `approved`, `rejected`, `blocked`, or `failed` structured outcomes; they do not close/reopen beads during the normal path
+- Purser validates reviewer outcomes/gates, then closes, reopens, or updates beads and records runtime artifacts for recovery
+
 ## Using Purser in another repo
 
 Canonical setup guide:

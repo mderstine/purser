@@ -93,7 +93,7 @@ class PurserLoop:
         spec_line = (
             f"The originating spec is: {spec_reference}. Read it and preserve exact literals from it.\n"
             if spec_reference
-            else "If the bead omits exact literals needed to implement correctly, do not guess: reopen or move it to open with a clarification note.\n"
+            else "If the bead omits exact literals needed to implement correctly, do not guess: add a concrete clarification note and report a blocked outcome for Purser to handle.\n"
         )
         message = (
             f"Execute bead {bead.id}.\n"
@@ -104,8 +104,9 @@ class PurserLoop:
             "If the bead/spec is too ambiguous to implement faithfully, do not guess; leave a concrete clarification note in Beads instead of fabricating details.\n"
             "Run the configured gates until all pass.\n"
             "When done, leave the bead in progress/open for Purser to mark review-ready.\n"
-            "Do not close the bead and do not rely on custom review statuses.\n"
-            "At the end, include a fenced ```json structured outcome with these fields exactly: status, bead_id, files_touched, new_beads, ready_for_review, summary."
+            "Do not close, reopen, or otherwise change bead lifecycle state; Purser owns lifecycle transitions.\n"
+            "At the end, return a JSON structured outcome with these fields exactly: status, bead_id, files_touched, new_beads, gates_run, ready_for_review, summary, blocking_reason.\n"
+            "Use status completed, blocked, or failed. Use blocking_reason null unless work is blocked or failed."
         )
         bead = self.beads.increment_attempts(bead.id)
         result = self.pi.run_role(
@@ -348,11 +349,10 @@ class PurserLoop:
             "Re-read the bead and inspect the codebase. Purser will run lint/types/tests after your review, so do not spend time running gates yourself unless absolutely necessary.\n"
             "Verify exact file names, exact strings, exact paths, and exact commands when they matter.\n"
             "Be decisive and concise.\n"
-            "If the work is correct, complete, and cohesive, you must actually close the bead in Beads during this run and summarize why.\n"
-            "If not, you must actually reopen it or move it to open in Beads during this run with a concrete rejection note.\n"
-            "A prose verdict without a real Beads state transition is a failure.\n"
+            "Do not close, reopen, or otherwise change the bead lifecycle state; Purser will perform Beads status transitions after validating your structured outcome and gates.\n"
             "Do not edit source files.\n"
-            "At the end, include a fenced ```json structured outcome with these fields exactly: decision, bead_id, state_transition_performed, issues, summary."
+            "At the end, return a JSON structured outcome with these fields exactly: status, bead_id, issues_found, gates_run, summary.\n"
+            "Use status approved, rejected, blocked, or failed. Use issues_found objects with severity, summary, and file fields."
         )
         result = self.pi.run_role(
             role="reviewer",
@@ -400,21 +400,6 @@ class PurserLoop:
                 extra={"repair_attempts": repair_attempts},
             )
             raise RuntimeError(message)
-        if not outcome.state_transition_performed:
-            message = f"reviewer structured outcome must set state_transition_performed=true for bead {bead.id}"
-            self.artifacts.write_role_artifact(
-                kind="reviewer",
-                bead_id=bead.id,
-                role_result=result,
-                structured_outcome=outcome,
-                state={
-                    "status_before": bead.normalized_status,
-                    "status_after": current.normalized_status,
-                },
-                errors=[message],
-                extra={"repair_attempts": repair_attempts},
-            )
-            raise RuntimeError(message)
         gate_results = []
         gate_failure = None
         try:
@@ -442,45 +427,17 @@ class PurserLoop:
             )
             return result
         current = self.beads.show(bead.id)
-        if outcome.decision == "approve":
+        if outcome.status == "approved":
             if current.normalized_status != "closed":
-                message = f"reviewer approved bead {bead.id} but did not actually close it in Beads"
-                self.artifacts.write_role_artifact(
-                    kind="reviewer",
-                    bead_id=bead.id,
-                    role_result=result,
-                    structured_outcome=outcome,
-                    gate_results=gate_results,
-                    state={
-                        "status_before": bead.normalized_status,
-                        "status_after": current.normalized_status,
-                    },
-                    errors=[message],
-                    extra={"repair_attempts": repair_attempts},
-                )
-                raise RuntimeError(message)
+                current = self.beads.close(bead.id, reason=outcome.summary)
         else:
-            if current.normalized_status == "closed":
-                message = (
-                    f"reviewer rejected bead {bead.id} but left it closed in Beads"
-                )
-                self.artifacts.write_role_artifact(
-                    kind="reviewer",
-                    bead_id=bead.id,
-                    role_result=result,
-                    structured_outcome=outcome,
-                    gate_results=gate_results,
-                    state={
-                        "status_before": bead.normalized_status,
-                        "status_after": current.normalized_status,
-                    },
-                    errors=[message],
-                    extra={"repair_attempts": repair_attempts},
-                )
-                raise RuntimeError(message)
             self.beads.mark_review_ready(bead.id, ready=False)
-            self.beads.update_status(bead.id, "open", notes=outcome.summary)
-            latest = self.beads.show(bead.id)
+            if current.normalized_status == "closed":
+                current = self.beads.reopen(
+                    bead.id, reason="purser reviewer outcome rejected closed work"
+                )
+            target_status = "blocked" if outcome.status == "blocked" else "open"
+            latest = self.beads.update_status(bead.id, target_status, notes=outcome.summary)
             self.artifacts.write_role_artifact(
                 kind="reviewer",
                 bead_id=bead.id,

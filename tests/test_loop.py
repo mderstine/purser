@@ -290,6 +290,55 @@ def test_reviewer_repairs_malformed_outcome(tmp_path: Path) -> None:
     assert artifact["extra"]["repair_attempts"][0]["parsed"] is True
 
 
+def test_reviewer_message_assigns_lifecycle_to_purser(tmp_path: Path) -> None:
+    bead = Bead(id="bd-6", title="Test", status="in_progress", raw={"metadata": {}})
+    loop = PurserLoop(PurserConfig(root=tmp_path))
+    fake_beads = FakeBeads(bead)
+    fake_pi = FakePi()
+    cast(Any, loop).beads = fake_beads
+    cast(Any, loop).pi = fake_pi
+    cast(Any, loop).gates = FakeGates()
+    reviewer_prompt = tmp_path / ".purser/prompts/reviewer.md"
+    executor_prompt = tmp_path / ".purser/prompts/executor.md"
+    reviewer_prompt.parent.mkdir(parents=True, exist_ok=True)
+    reviewer_prompt.write_text("reviewer", encoding="utf-8")
+    executor_prompt.write_text("executor", encoding="utf-8")
+    loop.config.roles.reviewer_prompt = ".purser/prompts/reviewer.md"
+    loop.config.roles.executor_prompt = ".purser/prompts/executor.md"
+
+    def run_role(**kwargs):
+        role = kwargs["role"]
+        fake_pi.calls.append(kwargs)
+        return RoleResult(
+            role=role,
+            model=kwargs["model"],
+            prompt_path=kwargs["prompt_path"],
+            command=[],
+            exit_code=0,
+            transcript=[{"type": "message_end"}],
+            final_text=json.dumps(
+                {
+                    "status": "approved",
+                    "bead_id": "bd-6",
+                    "issues_found": [],
+                    "gates_run": [],
+                    "summary": "reviewer approved",
+                }
+            ),
+            stderr="",
+            stdout="{}\n",
+        )
+
+    fake_pi.run_role = run_role
+
+    loop._review(bead)
+
+    message = fake_pi.calls[0]["message"]
+    assert "Do not close, reopen" in message
+    assert "Purser will perform Beads status transitions" in message
+    assert fake_beads.closed is True
+
+
 def test_execute_message_requires_exact_literals_and_no_guessing(
     tmp_path: Path,
 ) -> None:
@@ -322,4 +371,4 @@ def test_execute_message_requires_exact_literals_and_no_guessing(
         in message
     )
     assert "do not guess" in message
-    assert "do not rely on custom review statuses" in message
+    assert "Purser owns lifecycle transitions" in message

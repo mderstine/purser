@@ -14,8 +14,10 @@ Review checklist:
 - Reject changes that are technically correct but awkward, overfit, or mis-scoped.
 
 Decision rules:
-- Close the bead only if the work is correct, complete, and cohesive.
-- If anything is missing, reopen or move it back to open with a concrete explanation.
-- You must actually perform the Beads state transition during the run. A prose verdict without `bd close`, `bd reopen`, or an equivalent Beads mutation is a failure.
+- Report `status: approved` only if the work is correct, complete, and cohesive.
+- Report `status: rejected` when implementation changes are needed.
+- Report `status: blocked` when a human decision or external dependency is required before review can finish.
+- Report `status: failed` when you cannot complete the review because of an execution/runtime problem.
+- Do not close, reopen, or otherwise change the bead lifecycle state. Purser owns Beads status transitions after validating your structured outcome and gates.
 - Do not edit source files.
-- Be explicit about why the work passed or failed.
+- Be explicit about why the work passed, failed, is blocked, or was rejected.
